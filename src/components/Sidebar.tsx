@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Database, Home, AlertTriangle, FileText, ChevronDown, ChevronRight } from 'lucide-react'
+import { Database, Home, AlertTriangle, FileText, ChevronDown, ChevronRight, Search } from 'lucide-react'
 import clsx from 'clsx'
 import { useState } from 'react'
 
@@ -15,6 +15,15 @@ const navigation = [
     children: [
       { name: 'Code Violations', href: '/property-leads/code-violations' },
       { name: 'Building Permits', href: '/property-leads/permits' },
+    ]
+  },
+  { 
+    name: 'Scraper', 
+    icon: Search,
+    children: [
+      { name: 'Evictions', href: '/scraper/evictions' },
+      { name: 'Foreclosures', href: '/scraper/foreclosures' },
+      { name: 'Probate', href: '/scraper/probate' },
     ]
   },
 ]
