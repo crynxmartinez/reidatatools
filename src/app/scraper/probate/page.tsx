@@ -15,6 +15,7 @@ interface ProbateRecord {
   estimatedValue: string
   status: string
   county: string
+  link?: string
 }
 
 export default function ProbatePage() {
@@ -245,7 +246,18 @@ export default function ProbatePage() {
                 {results.map((record, index) => (
                   <tr key={record.caseNumber || index} className="hover:bg-gray-50">
                     <td className="px-4 py-4 text-sm text-gray-900 font-medium">
-                      {record.propertyAddress}
+                      {record.link ? (
+                        <a 
+                          href={record.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {record.propertyAddress}
+                        </a>
+                      ) : (
+                        record.propertyAddress
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-600">
                       {record.decedent}

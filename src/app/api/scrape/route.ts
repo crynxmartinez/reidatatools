@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCountyByName } from '@/config/scrapers'
+import { searchOSCN, OSCNCase } from '@/services/oscn'
 
 interface EvictionRecord {
   caseNumber: string
@@ -108,6 +109,54 @@ function generateMockForeclosures(county: string, fromDate: string, toDate: stri
   return records.sort((a, b) => new Date(b.filingDate).getTime() - new Date(a.filingDate).getTime())
 }
 
+// Convert OSCN cases to eviction records format
+function oscnToEvictionRecords(cases: OSCNCase[]): EvictionRecord[] {
+  return cases.map(c => ({
+    caseNumber: c.caseNumber,
+    filingDate: c.filingDate,
+    plaintiff: c.plaintiff,
+    defendant: c.defendant,
+    address: 'See Case Details',
+    status: c.status,
+    county: c.county,
+    caseType: c.caseTypeDescription,
+    link: c.link
+  })) as any[]
+}
+
+// Convert OSCN cases to foreclosure records format
+function oscnToForeclosureRecords(cases: OSCNCase[]) {
+  return cases.map(c => ({
+    caseNumber: c.caseNumber,
+    filingDate: c.filingDate,
+    auctionDate: '',
+    owner: c.defendant,
+    lender: c.plaintiff,
+    address: 'See Case Details',
+    amount: '',
+    status: c.status,
+    county: c.county,
+    caseType: c.caseTypeDescription,
+    link: c.link
+  }))
+}
+
+// Convert OSCN cases to probate records format
+function oscnToProbateRecords(cases: OSCNCase[]) {
+  return cases.map(c => ({
+    caseNumber: c.caseNumber,
+    filingDate: c.filingDate,
+    decedent: c.defendant || 'See Case Details',
+    executor: c.plaintiff || 'See Case Details',
+    caseType: c.caseTypeDescription,
+    propertyAddress: 'See Case Details',
+    estimatedValue: '',
+    status: c.status,
+    county: c.county,
+    link: c.link
+  }))
+}
+
 function generateMockProbate(county: string, fromDate: string, toDate: string) {
   const statuses = ['Filed', 'Pending', 'Letters Issued', 'Closed', 'In Administration']
   const caseTypes = ['Independent Administration', 'Dependent Administration', 'Muniment of Title', 'Small Estate Affidavit']
@@ -173,6 +222,11 @@ export async function POST(request: NextRequest) {
     await new Promise(resolve => setTimeout(resolve, 1500 + Math.random() * 1500))
 
     let results: any[] = []
+    let isRealData = false
+    let dataSource = 'Demo'
+
+    // Check if this is an Oklahoma county using OSCN
+    const isOSCN = countyConfig.state === 'OK' && countyConfig.oscnCode
 
     switch (type) {
       case 'evictions':
@@ -182,7 +236,26 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           )
         }
-        results = generateMockEvictions(county, fromDate, toDate)
+        
+        if (isOSCN && countyConfig.evictions.method === 'oscn') {
+          try {
+            console.log(`[Scrape] Fetching OSCN evictions for ${county} County, OK`)
+            const oscnCases = await searchOSCN({
+              county: countyConfig.oscnCode!,
+              caseTypes: countyConfig.evictions.caseTypes || ['SC', 'CS'],
+              fromDate,
+              toDate
+            })
+            results = oscnToEvictionRecords(oscnCases)
+            isRealData = true
+            dataSource = 'OSCN'
+          } catch (error: any) {
+            console.error(`[Scrape] OSCN error: ${error.message}, falling back to demo data`)
+            results = generateMockEvictions(county, fromDate, toDate)
+          }
+        } else {
+          results = generateMockEvictions(county, fromDate, toDate)
+        }
         break
 
       case 'foreclosures':
@@ -192,7 +265,26 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           )
         }
-        results = generateMockForeclosures(county, fromDate, toDate)
+        
+        if (isOSCN && countyConfig.foreclosures.method === 'oscn') {
+          try {
+            console.log(`[Scrape] Fetching OSCN foreclosures for ${county} County, OK`)
+            const oscnCases = await searchOSCN({
+              county: countyConfig.oscnCode!,
+              caseTypes: countyConfig.foreclosures.caseTypes || ['CV', 'CJ'],
+              fromDate,
+              toDate
+            })
+            results = oscnToForeclosureRecords(oscnCases)
+            isRealData = true
+            dataSource = 'OSCN'
+          } catch (error: any) {
+            console.error(`[Scrape] OSCN error: ${error.message}, falling back to demo data`)
+            results = generateMockForeclosures(county, fromDate, toDate)
+          }
+        } else {
+          results = generateMockForeclosures(county, fromDate, toDate)
+        }
         break
 
       case 'probate':
@@ -202,7 +294,26 @@ export async function POST(request: NextRequest) {
             { status: 404 }
           )
         }
-        results = generateMockProbate(county, fromDate, toDate)
+        
+        if (isOSCN && countyConfig.probate.method === 'oscn') {
+          try {
+            console.log(`[Scrape] Fetching OSCN probate for ${county} County, OK`)
+            const oscnCases = await searchOSCN({
+              county: countyConfig.oscnCode!,
+              caseTypes: countyConfig.probate.caseTypes || ['PB', 'PG'],
+              fromDate,
+              toDate
+            })
+            results = oscnToProbateRecords(oscnCases)
+            isRealData = true
+            dataSource = 'OSCN'
+          } catch (error: any) {
+            console.error(`[Scrape] OSCN error: ${error.message}, falling back to demo data`)
+            results = generateMockProbate(county, fromDate, toDate)
+          }
+        } else {
+          results = generateMockProbate(county, fromDate, toDate)
+        }
         break
 
       default:
@@ -215,10 +326,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       county,
+      state: countyConfig.state,
       type,
       count: results.length,
       results,
-      note: 'Demo data - Real scraping requires Puppeteer/Playwright setup'
+      isRealData,
+      dataSource,
+      note: isRealData 
+        ? `Real data from ${dataSource} - Oklahoma State Courts Network` 
+        : 'Demo data - Real scraping requires additional setup'
     })
 
   } catch (error: any) {

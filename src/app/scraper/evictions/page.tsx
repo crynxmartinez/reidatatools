@@ -13,6 +13,8 @@ interface EvictionRecord {
   address: string
   status: string
   county: string
+  caseType?: string
+  link?: string
 }
 
 export default function EvictionsPage() {
@@ -116,7 +118,7 @@ export default function EvictionsPage() {
           Eviction Records Scraper
         </h1>
         <p className="text-gray-600 mt-1">
-          Scrape eviction filings from Texas county JP courts - find landlords with problem properties
+          Scrape eviction filings from Texas & Oklahoma courts - find landlords with problem properties
         </p>
       </div>
 
@@ -269,7 +271,18 @@ export default function EvictionsPage() {
                 {results.map((record, index) => (
                   <tr key={record.caseNumber || index} className="hover:bg-gray-50">
                     <td className="px-4 py-4 text-sm text-gray-900 font-medium">
-                      {record.caseNumber}
+                      {record.link ? (
+                        <a 
+                          href={record.link} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800 hover:underline"
+                        >
+                          {record.caseNumber}
+                        </a>
+                      ) : (
+                        record.caseNumber
+                      )}
                     </td>
                     <td className="px-4 py-4 text-sm text-gray-600">
                       {record.filingDate}
