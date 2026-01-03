@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import * as cheerio from 'cheerio'
 
 const SCRAPE_DO_API_KEY = process.env.SCRAPE_DO_API_KEY || '565faafc96da4e46a1377f6d10b673d04e466e10d78'
 
@@ -43,199 +42,102 @@ async function scrapeWithScrapeDo(targetUrl: string): Promise<string> {
   return await response.text()
 }
 
-function parseFastPeopleSearch(html: string, searchUrl: string): SkipTraceResult[] {
-  const $ = cheerio.load(html)
-  const results: SkipTraceResult[] = []
+function extractText(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim()
+}
+
+function extractPhones(text: string): string[] {
+  const phoneRegex = /\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}/g
+  const matches = text.match(phoneRegex) || []
+  return [...new Set(matches)]
+}
+
+function extractEmails(text: string): string[] {
+  const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g
+  const matches = text.match(emailRegex) || []
+  return [...new Set(matches)]
+}
+
+function extractAddresses(text: string): SkipTraceResult['addresses'] {
+  const addressRegex = /(\d+\s+[A-Za-z0-9\s]+(?:St|Street|Ave|Avenue|Blvd|Boulevard|Dr|Drive|Ln|Lane|Rd|Road|Ct|Court|Way|Pl|Place)[^,]*),\s*([A-Za-z\s]+),\s*([A-Z]{2})\s*(\d{5})?/gi
+  const matches = [...text.matchAll(addressRegex)]
   
-  $('.card.card-block.card-summary').each((_, card) => {
-    try {
-      const nameEl = $(card).find('.card-title a, h2.card-title')
-      const name = nameEl.text().trim()
-      
-      if (!name) return
-      
-      const ageMatch = $(card).find('.card-title').text().match(/Age\s*(\d+)/i)
-      const age = ageMatch ? parseInt(ageMatch[1]) : undefined
-      
-      const addresses: SkipTraceResult['addresses'] = []
-      $(card).find('.detail-box-address, .address-current, .link-to-more').each((i, addrEl) => {
-        const addrText = $(addrEl).text().trim()
-        const parts = addrText.split(',').map(p => p.trim())
-        if (parts.length >= 2) {
-          const stateZip = parts[parts.length - 1].split(' ')
-          addresses.push({
-            street: parts[0] || '',
-            city: parts.length > 2 ? parts[1] : '',
-            state: stateZip[0] || '',
-            zip: stateZip[1] || '',
-            current: i === 0
-          })
+  return matches.slice(0, 3).map((match, i) => ({
+    street: match[1]?.trim() || '',
+    city: match[2]?.trim() || '',
+    state: match[3]?.trim() || '',
+    zip: match[4]?.trim() || '',
+    current: i === 0
+  }))
+}
+
+function parseHtmlResults(html: string, searchUrl: string, source: string): SkipTraceResult[] {
+  const results: SkipTraceResult[] = []
+  const text = extractText(html)
+  
+  const namePatterns = [
+    /([A-Z][a-z]+\s+(?:[A-Z]\.\s+)?[A-Z][a-z]+)(?:\s*,?\s*(?:Age|age)\s*:?\s*(\d+))?/g,
+    /([A-Z][A-Z]+\s+[A-Z][A-Z]+)/g
+  ]
+  
+  const names: { name: string; age?: number }[] = []
+  
+  for (const pattern of namePatterns) {
+    const matches = [...text.matchAll(pattern)]
+    for (const match of matches) {
+      const name = match[1]?.trim()
+      if (name && name.length > 3 && name.length < 50 && !name.includes('Search') && !name.includes('People')) {
+        const age = match[2] ? parseInt(match[2]) : undefined
+        if (!names.find(n => n.name === name)) {
+          names.push({ name, age })
         }
-      })
-      
-      const phones: SkipTraceResult['phones'] = []
-      $(card).find('.detail-box-phone a, a[href^="tel:"]').each((_, phoneEl) => {
-        const phone = $(phoneEl).text().trim().replace(/[^\d-().\s]/g, '')
-        if (phone && phone.length >= 10) {
-          phones.push({ number: phone })
-        }
-      })
-      
-      const relatives: string[] = []
-      $(card).find('.rel-item a, .detail-box-relatives a').each((_, relEl) => {
-        const rel = $(relEl).text().trim()
-        if (rel) relatives.push(rel)
-      })
-      
-      if (name) {
-        results.push({
-          name,
-          age,
-          addresses,
-          phones,
-          emails: [],
-          relatives,
-          source: 'FastPeopleSearch',
-          sourceUrl: searchUrl
-        })
       }
-    } catch (e) {
-      console.error('[SkipTrace] Error parsing FPS card:', e)
     }
-  })
+    if (names.length >= 5) break
+  }
+  
+  const phones = extractPhones(text)
+  const emails = extractEmails(text)
+  const addresses = extractAddresses(text)
+  
+  if (names.length > 0) {
+    for (const { name, age } of names.slice(0, 10)) {
+      results.push({
+        name,
+        age,
+        addresses: addresses.length > 0 ? addresses : [],
+        phones: phones.slice(0, 3).map(p => ({ number: p })),
+        emails: emails.slice(0, 2),
+        relatives: [],
+        source,
+        sourceUrl: searchUrl
+      })
+    }
+  } else if (phones.length > 0 || addresses.length > 0) {
+    results.push({
+      name: 'Unknown',
+      addresses,
+      phones: phones.slice(0, 3).map(p => ({ number: p })),
+      emails: emails.slice(0, 2),
+      relatives: [],
+      source,
+      sourceUrl: searchUrl
+    })
+  }
   
   return results
+}
+
+function parseFastPeopleSearch(html: string, searchUrl: string): SkipTraceResult[] {
+  return parseHtmlResults(html, searchUrl, 'FastPeopleSearch')
 }
 
 function parseTruePeopleSearch(html: string, searchUrl: string): SkipTraceResult[] {
-  const $ = cheerio.load(html)
-  const results: SkipTraceResult[] = []
-  
-  $('[data-detail-link], .card-summary, .people-list .card').each((_, card) => {
-    try {
-      const nameEl = $(card).find('.card-title a, h2 a, .name')
-      const name = nameEl.first().text().trim()
-      
-      if (!name) return
-      
-      const ageText = $(card).text()
-      const ageMatch = ageText.match(/Age\s*(\d+)/i) || ageText.match(/(\d+)\s*years?\s*old/i)
-      const age = ageMatch ? parseInt(ageMatch[1]) : undefined
-      
-      const addresses: SkipTraceResult['addresses'] = []
-      $(card).find('.address, .location, [class*="address"]').each((i, addrEl) => {
-        const addrText = $(addrEl).text().trim()
-        if (addrText.includes(',')) {
-          const parts = addrText.split(',').map(p => p.trim())
-          const stateZip = (parts[parts.length - 1] || '').split(' ')
-          addresses.push({
-            street: parts[0] || '',
-            city: parts.length > 2 ? parts[1] : '',
-            state: stateZip[0] || '',
-            zip: stateZip[1] || '',
-            current: i === 0
-          })
-        }
-      })
-      
-      const phones: SkipTraceResult['phones'] = []
-      $(card).find('a[href^="tel:"], .phone, [class*="phone"]').each((_, phoneEl) => {
-        const phone = $(phoneEl).text().trim().replace(/[^\d-().\s]/g, '')
-        if (phone && phone.length >= 10) {
-          phones.push({ number: phone })
-        }
-      })
-      
-      const emails: string[] = []
-      $(card).find('a[href^="mailto:"], .email').each((_, emailEl) => {
-        const email = $(emailEl).text().trim()
-        if (email && email.includes('@')) {
-          emails.push(email)
-        }
-      })
-      
-      const relatives: string[] = []
-      $(card).find('.relative a, .relatives a, [class*="relative"] a').each((_, relEl) => {
-        const rel = $(relEl).text().trim()
-        if (rel) relatives.push(rel)
-      })
-      
-      if (name) {
-        results.push({
-          name,
-          age,
-          addresses,
-          phones,
-          emails,
-          relatives,
-          source: 'TruePeopleSearch',
-          sourceUrl: searchUrl
-        })
-      }
-    } catch (e) {
-      console.error('[SkipTrace] Error parsing TPS card:', e)
-    }
-  })
-  
-  return results
+  return parseHtmlResults(html, searchUrl, 'TruePeopleSearch')
 }
 
 function parseCyberBackgroundChecks(html: string, searchUrl: string): SkipTraceResult[] {
-  const $ = cheerio.load(html)
-  const results: SkipTraceResult[] = []
-  
-  $('.card, .person-card, .result-card, [class*="person"]').each((_, card) => {
-    try {
-      const nameEl = $(card).find('h2, h3, .name, .person-name')
-      const name = nameEl.first().text().trim()
-      
-      if (!name) return
-      
-      const ageMatch = $(card).text().match(/Age[:\s]*(\d+)/i)
-      const age = ageMatch ? parseInt(ageMatch[1]) : undefined
-      
-      const addresses: SkipTraceResult['addresses'] = []
-      $(card).find('.address, [class*="address"]').each((i, addrEl) => {
-        const addrText = $(addrEl).text().trim()
-        if (addrText.includes(',')) {
-          const parts = addrText.split(',').map(p => p.trim())
-          const stateZip = (parts[parts.length - 1] || '').split(' ')
-          addresses.push({
-            street: parts[0] || '',
-            city: parts.length > 2 ? parts[1] : '',
-            state: stateZip[0] || '',
-            zip: stateZip[1] || '',
-            current: i === 0
-          })
-        }
-      })
-      
-      const phones: SkipTraceResult['phones'] = []
-      $(card).find('a[href^="tel:"], .phone, [class*="phone"]').each((_, phoneEl) => {
-        const phone = $(phoneEl).text().trim().replace(/[^\d-().\s]/g, '')
-        if (phone && phone.length >= 10) {
-          phones.push({ number: phone })
-        }
-      })
-      
-      if (name) {
-        results.push({
-          name,
-          age,
-          addresses,
-          phones,
-          emails: [],
-          relatives: [],
-          source: 'CyberBackgroundChecks',
-          sourceUrl: searchUrl
-        })
-      }
-    } catch (e) {
-      console.error('[SkipTrace] Error parsing CBC card:', e)
-    }
-  })
-  
-  return results
+  return parseHtmlResults(html, searchUrl, 'CyberBackgroundChecks')
 }
 
 function buildSearchUrl(source: string, searchType: string, params: any): string {
