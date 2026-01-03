@@ -189,104 +189,127 @@ async function queryByAddress(
     return null
   }
 
-  let where = ''
+  // Build multiple query strategies - from most specific to broadest
+  const queries: string[] = []
   
   if (county.situsField) {
-    where = `UPPER(${county.situsField}) LIKE '${houseNumber} %'`
-    if (streetToken) {
-      where += ` AND UPPER(${county.situsField}) LIKE '% ${streetToken} %'`
+    // Strategy 1: Exact house number + street token + city
+    if (streetToken && city) {
+      const cleanCity = city.toUpperCase().replace(/'/g, "''")
+      queries.push(`UPPER(${county.situsField}) LIKE '${houseNumber} %${streetToken}%' AND UPPER(${county.cityField || county.situsField}) LIKE '%${cleanCity}%'`)
     }
+    // Strategy 2: Exact house number + street token (no city filter)
+    if (streetToken) {
+      queries.push(`UPPER(${county.situsField}) LIKE '${houseNumber} %${streetToken}%'`)
+    }
+    // Strategy 3: Just house number + city
+    if (city) {
+      const cleanCity = city.toUpperCase().replace(/'/g, "''")
+      queries.push(`UPPER(${county.situsField}) LIKE '${houseNumber} %' AND UPPER(${county.cityField || county.situsField}) LIKE '%${cleanCity}%'`)
+    }
+    // Strategy 4: Just house number (broadest)
+    queries.push(`UPPER(${county.situsField}) LIKE '${houseNumber} %'`)
   } else if (county.name.includes('Dallas')) {
-    where = `ST_NUM = '${houseNumber}'`
-    if (streetToken) {
-      where += ` AND UPPER(ST_NAME) LIKE '%${streetToken}%'`
+    // Dallas-specific queries using ST_NUM and ST_NAME fields
+    // Strategy 1: Exact house number + street token + city
+    if (streetToken && city) {
+      const cleanCity = city.toUpperCase().replace(/'/g, "''")
+      queries.push(`ST_NUM = '${houseNumber}' AND UPPER(ST_NAME) LIKE '%${streetToken}%' AND UPPER(CITY) LIKE '%${cleanCity}%'`)
     }
+    // Strategy 2: Exact house number + street token (no city filter)
+    if (streetToken) {
+      queries.push(`ST_NUM = '${houseNumber}' AND UPPER(ST_NAME) LIKE '%${streetToken}%'`)
+    }
+    // Strategy 3: Just house number + city
+    if (city) {
+      const cleanCity = city.toUpperCase().replace(/'/g, "''")
+      queries.push(`ST_NUM = '${houseNumber}' AND UPPER(CITY) LIKE '%${cleanCity}%'`)
+    }
+    // Strategy 4: Just house number (broadest - will return many results, rely on fuzzy matching)
+    queries.push(`ST_NUM = '${houseNumber}'`)
   } else {
     return null
   }
 
-  if (city && county.cityField) {
-    const cleanCity = city.toUpperCase().replace(/'/g, "''")
-    where += ` AND UPPER(${county.cityField}) LIKE '%${cleanCity}%'`
-  }
+  console.log(`[${county.name}] Searching for: "${address}" (house: ${houseNumber}, street: ${streetToken})`)
 
-  const params = {
-    f: 'json',
-    where: where,
-    outFields: county.outFields.join(','),
-    returnGeometry: 'false',
-    resultRecordCount: 25
-  }
-
-  console.log(`[${county.name}] Query:`, where)
-  console.log(`[${county.name}] URL:`, county.url)
-
-  try {
-    // Use proxy to avoid CORS issues
-    const proxyUrl = `/api/arcgis-proxy?url=${encodeURIComponent(county.url + '/query')}`
-    const queryParams = new URLSearchParams(params as any)
-    const response = await axios.get(`${proxyUrl}&${queryParams.toString()}`, { timeout: 30000 })
-    const features = response.data.features || []
-
-    console.log(`[${county.name}] Results:`, features.length, 'features')
-
-    if (features.length === 0) {
-      return null
+  for (const where of queries) {
+    const params = {
+      f: 'json',
+      where: where,
+      outFields: county.outFields.join(','),
+      returnGeometry: 'false',
+      resultRecordCount: 50
     }
 
-    let bestMatch = null
-    let bestScore = 0
+    console.log(`[${county.name}] Query:`, where)
 
-    for (const feature of features) {
-      const attrs = feature.attributes
-      let situsAddress = ''
+    try {
+      const proxyUrl = `/api/arcgis-proxy?url=${encodeURIComponent(county.url + '/query')}`
+      const queryParams = new URLSearchParams(params as any)
+      const response = await axios.get(`${proxyUrl}&${queryParams.toString()}`, { timeout: 30000 })
+      const features = response.data.features || []
 
-      if (county.situsField) {
-        situsAddress = normalizeAddress(attrs[county.situsField] || '')
-      } else if (county.name.includes('Dallas')) {
-        const parts = [
-          attrs.ST_NUM,
-          attrs.ST_DIR,
-          attrs.ST_NAME,
-          attrs.ST_TYPE,
-          attrs.UNITID
-        ].filter(p => p && String(p).trim() !== 'None')
-        situsAddress = normalizeAddress(parts.join(' '))
+      console.log(`[${county.name}] Results:`, features.length, 'features')
+
+      if (features.length === 0) {
+        continue // Try next query strategy
       }
 
-      const score = fuzzyMatch(normalizedAddr, situsAddress)
+      let bestMatch = null
+      let bestScore = 0
 
-      console.log(`  Comparing: "${normalizedAddr}" vs "${situsAddress}" = ${score}%`)
+      for (const feature of features) {
+        const attrs = feature.attributes
+        let situsAddress = ''
 
-      if (zip && county.zipField) {
-        const featureZip = String(attrs[county.zipField] || '').trim()
-        if (featureZip && featureZip !== zip) {
-          console.log(`  Skipping: ZIP mismatch (${featureZip} vs ${zip})`)
-          continue
+        if (county.situsField) {
+          situsAddress = normalizeAddress(attrs[county.situsField] || '')
+        } else if (county.name.includes('Dallas')) {
+          const parts = [
+            attrs.ST_NUM,
+            attrs.ST_DIR,
+            attrs.ST_NAME,
+            attrs.ST_TYPE,
+            attrs.UNITID
+          ].filter(p => p && String(p).trim() !== 'None' && String(p).trim() !== '')
+          situsAddress = normalizeAddress(parts.join(' '))
+        }
+
+        const score = fuzzyMatch(normalizedAddr, situsAddress)
+
+        console.log(`  Comparing: "${normalizedAddr}" vs "${situsAddress}" = ${score}%`)
+
+        // Skip ZIP mismatch only if we have a ZIP and the feature has one
+        if (zip && county.zipField) {
+          const featureZip = String(attrs[county.zipField] || '').trim()
+          if (featureZip && featureZip.substring(0, 5) !== zip.substring(0, 5)) {
+            console.log(`  Skipping: ZIP mismatch (${featureZip} vs ${zip})`)
+            continue
+          }
+        }
+
+        if (score > bestScore && score >= 70) { // Lowered threshold from 75 to 70
+          bestScore = score
+          bestMatch = attrs
+          console.log(`  New best match! Score: ${score}%`)
         }
       }
 
-      if (score > bestScore && score >= 75) {
-        bestScore = score
-        bestMatch = attrs
-        console.log(`  New best match! Score: ${score}%`)
+      if (bestMatch) {
+        return mapAttributesToPropertyData(
+          county,
+          bestMatch,
+          { inputAddress: address, inputCity: city, inputState: 'TX', inputZip: zip },
+          bestScore
+        )
       }
+    } catch (error: any) {
+      console.error(`[${county.name}] Query error:`, error.message)
     }
-
-    if (!bestMatch) {
-      return null
-    }
-
-    return mapAttributesToPropertyData(
-      county,
-      bestMatch,
-      { inputAddress: address, inputCity: city, inputState: zip ? 'TX' : '', inputZip: zip },
-      bestScore
-    )
-  } catch (error: any) {
-    console.error(`[${county.name}] Error:`, error.message)
-    return null
   }
+
+  return null
 }
 
 function mapAttributesToPropertyData(
