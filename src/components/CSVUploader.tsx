@@ -8,13 +8,15 @@ import { processPropertyData } from '@/services/arcgis'
 
 interface CSVUploaderProps {
   selectedState: string
+  selectedCounty: string
   searchType: SearchType
   onResults: (results: PropertyData[]) => void
   onProcessingChange: (isProcessing: boolean) => void
 }
 
 export default function CSVUploader({ 
-  selectedState, 
+  selectedState,
+  selectedCounty,
   searchType, 
   onResults, 
   onProcessingChange 
@@ -77,12 +79,25 @@ export default function CSVUploader({
             const row = data[i]
             setProgress({ current: i + 1, total: data.length })
 
-            const result = await processPropertyData(
-              selectedState,
-              searchType,
-              row
-            )
-            processedResults.push(result)
+            try {
+              const result = await processPropertyData(
+                selectedState,
+                selectedCounty,
+                searchType,
+                row
+              )
+              processedResults.push(result)
+            } catch (rowError: any) {
+              console.error(`Error processing row ${i + 1}:`, rowError)
+              // Add error result for this row
+              processedResults.push({
+                id: Math.random().toString(36),
+                source: selectedState,
+                status: 'error',
+                inputParcelId: row['parcel id'],
+                inputAddress: row['property address'],
+              })
+            }
           }
 
           onResults(processedResults)

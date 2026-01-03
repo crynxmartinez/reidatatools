@@ -2,16 +2,27 @@
 
 import { useState } from 'react'
 import StateSelector from '@/components/StateSelector'
+import CountySelector from '@/components/CountySelector'
 import SearchTypeToggle from '@/components/SearchTypeToggle'
 import CSVUploader from '@/components/CSVUploader'
 import ResultsTable from '@/components/ResultsTable'
 import { PropertyData } from '@/types'
+import { getStateByCode } from '@/config/states'
 
 export default function DataExtractorPage() {
   const [selectedState, setSelectedState] = useState<string>('')
+  const [selectedCounty, setSelectedCounty] = useState<string>('')
   const [searchType, setSearchType] = useState<'address' | 'parcel'>('address')
   const [results, setResults] = useState<PropertyData[]>([])
   const [isProcessing, setIsProcessing] = useState(false)
+
+  const handleStateChange = (state: string) => {
+    setSelectedState(state)
+    setSelectedCounty('') // Reset county when state changes
+  }
+
+  const stateConfig = selectedState ? getStateByCode(selectedState) : null
+  const counties = stateConfig?.counties || []
 
   return (
     <div className="p-8">
@@ -27,8 +38,18 @@ export default function DataExtractorPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <StateSelector 
               selectedState={selectedState}
-              onStateChange={setSelectedState}
+              onStateChange={handleStateChange}
             />
+            {counties.length > 1 && (
+              <CountySelector
+                counties={counties}
+                selectedCounty={selectedCounty}
+                onCountyChange={setSelectedCounty}
+              />
+            )}
+          </div>
+
+          <div className="mb-6">
             <SearchTypeToggle 
               searchType={searchType}
               onSearchTypeChange={setSearchType}
@@ -37,6 +58,7 @@ export default function DataExtractorPage() {
 
           <CSVUploader
             selectedState={selectedState}
+            selectedCounty={selectedCounty}
             searchType={searchType}
             onResults={setResults}
             onProcessingChange={setIsProcessing}

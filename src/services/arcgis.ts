@@ -5,6 +5,7 @@ import { normalizeAddress, fuzzyMatch, extractHouseNumber, extractStreetToken } 
 
 export async function processPropertyData(
   stateCode: string,
+  selectedCountyIndex: string,
   searchType: SearchType,
   row: CSVRow
 ): Promise<PropertyData> {
@@ -23,10 +24,21 @@ export async function processPropertyData(
     }
   }
 
+  // If a specific county is selected, use only that county
+  // If "all" is selected, use all counties
+  let countiesToQuery = state.counties
+  if (selectedCountyIndex && selectedCountyIndex !== '' && selectedCountyIndex !== 'all') {
+    const index = parseInt(selectedCountyIndex)
+    if (!isNaN(index) && index >= 0 && index < state.counties.length) {
+      countiesToQuery = [state.counties[index]]
+    }
+  }
+  // If selectedCountyIndex is 'all' or empty, use all counties (default behavior)
+
   if (searchType === 'parcel') {
-    return await searchByParcel(state.counties, row)
+    return await searchByParcel(countiesToQuery, row)
   } else {
-    return await searchByAddress(state.counties, row)
+    return await searchByAddress(countiesToQuery, row)
   }
 }
 
@@ -51,8 +63,9 @@ async function searchByParcel(
       if (result) {
         return result
       }
-    } catch (error) {
-      console.error(`Error querying ${county.name}:`, error)
+    } catch (error: any) {
+      console.error(`[${county.name}] Error querying parcel:`, error.message)
+      // Continue to next county instead of failing
     }
   }
 
@@ -68,25 +81,48 @@ async function queryByParcel(
   county: CountyConfig,
   parcelId: string
 ): Promise<PropertyData | null> {
-  const where = `${county.parcelField} = '${parcelId.replace(/'/g, "''")}'`
+  // Try multiple query formats for better matching
+  const queries = [
+    `${county.parcelField} = '${parcelId.replace(/'/g, "''")}'`,
+    `UPPER(${county.parcelField}) = '${parcelId.toUpperCase().replace(/'/g, "''")}'`,
+    `${county.parcelField} LIKE '%${parcelId.replace(/'/g, "''")}%'`
+  ]
   
-  const params = {
-    f: 'json',
-    where: where,
-    outFields: county.outFields.join(','),
-    returnGeometry: 'false',
-    resultRecordCount: 1
+  console.log(`[${county.name}] Trying parcel ID:`, parcelId)
+  console.log(`[${county.name}] URL:`, county.url)
+
+  for (const where of queries) {
+    const params = {
+      f: 'json',
+      where: where,
+      outFields: county.outFields.join(','),
+      returnGeometry: 'false',
+      resultRecordCount: 5
+    }
+
+    console.log(`[${county.name}] Query:`, where)
+
+    try {
+      // Use proxy to avoid CORS issues
+      const proxyUrl = `/api/arcgis-proxy?url=${encodeURIComponent(county.url + '/query')}`
+      const queryParams = new URLSearchParams(params as any)
+      const response = await axios.get(`${proxyUrl}&${queryParams.toString()}`, { timeout: 30000 })
+      const features = response.data.features || []
+
+      console.log(`[${county.name}] Results:`, features.length, 'features')
+
+      if (features.length > 0) {
+        const attrs = features[0].attributes
+        return mapAttributesToPropertyData(county, attrs, { inputParcelId: parcelId }, 100)
+      }
+    } catch (error: any) {
+      console.error(`[${county.name}] Query error:`, error.message)
+      // Continue to next query format
+    }
   }
 
-  const response = await axios.get(`${county.url}/query`, { params, timeout: 30000 })
-  const features = response.data.features || []
-
-  if (features.length === 0) {
-    return null
-  }
-
-  const attrs = features[0].attributes
-  return mapAttributesToPropertyData(county, attrs, { inputParcelId: parcelId }, 100)
+  // No matches found with any query format
+  return null
 }
 
 async function searchByAddress(
@@ -179,7 +215,10 @@ async function queryByAddress(
   console.log(`[${county.name}] URL:`, county.url)
 
   try {
-    const response = await axios.get(`${county.url}/query`, { params, timeout: 30000 })
+    // Use proxy to avoid CORS issues
+    const proxyUrl = `/api/arcgis-proxy?url=${encodeURIComponent(county.url + '/query')}`
+    const queryParams = new URLSearchParams(params as any)
+    const response = await axios.get(`${proxyUrl}&${queryParams.toString()}`, { timeout: 30000 })
     const features = response.data.features || []
 
     console.log(`[${county.name}] Results:`, features.length, 'features')
@@ -195,30 +234,30 @@ async function queryByAddress(
       const attrs = feature.attributes
       let situsAddress = ''
 
-    if (county.situsField) {
-      situsAddress = normalizeAddress(attrs[county.situsField] || '')
-    } else if (county.name.includes('Dallas')) {
-      const parts = [
-        attrs.ST_NUM,
-        attrs.ST_DIR,
-        attrs.ST_NAME,
-        attrs.ST_TYPE,
-        attrs.UNITID
-      ].filter(p => p && String(p).trim() !== 'None')
-      situsAddress = normalizeAddress(parts.join(' '))
-    }
-
-    const score = fuzzyMatch(normalizedAddr, situsAddress)
-
-    console.log(`  Comparing: "${normalizedAddr}" vs "${situsAddress}" = ${score}%`)
-
-    if (zip && county.zipField) {
-      const featureZip = String(attrs[county.zipField] || '').trim()
-      if (featureZip && featureZip !== zip) {
-        console.log(`  Skipping: ZIP mismatch (${featureZip} vs ${zip})`)
-        continue
+      if (county.situsField) {
+        situsAddress = normalizeAddress(attrs[county.situsField] || '')
+      } else if (county.name.includes('Dallas')) {
+        const parts = [
+          attrs.ST_NUM,
+          attrs.ST_DIR,
+          attrs.ST_NAME,
+          attrs.ST_TYPE,
+          attrs.UNITID
+        ].filter(p => p && String(p).trim() !== 'None')
+        situsAddress = normalizeAddress(parts.join(' '))
       }
-    }
+
+      const score = fuzzyMatch(normalizedAddr, situsAddress)
+
+      console.log(`  Comparing: "${normalizedAddr}" vs "${situsAddress}" = ${score}%`)
+
+      if (zip && county.zipField) {
+        const featureZip = String(attrs[county.zipField] || '').trim()
+        if (featureZip && featureZip !== zip) {
+          console.log(`  Skipping: ZIP mismatch (${featureZip} vs ${zip})`)
+          continue
+        }
+      }
 
       if (score > bestScore && score >= 75) {
         bestScore = score
