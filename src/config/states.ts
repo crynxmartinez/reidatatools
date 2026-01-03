@@ -23,7 +23,7 @@ export const STATES: StateConfig[] = [
         outFields: ['ACCT_NUM', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP', 'LEGAL_DESC', 'MARKET_VALUE', 'APPRAISED_VALUE']
       },
       {
-        name: 'Tarrant County',
+        name: 'Tarrant County (TAD)',
         url: 'https://mapit.tarrantcounty.com/arcgis/rest/services/Dynamic/TADParcels/FeatureServer/0',
         parcelField: 'TAXPIN',
         ownerField: 'OWNER_NAME',
@@ -36,7 +36,7 @@ export const STATES: StateConfig[] = [
         outFields: ['TAXPIN', 'ACCOUNT', 'OWNER_NAME', 'OWNER_ADDR', 'OWNER_CITY', 'OWNER_ZIP', 'OWNER_ZIP_', 'SITUS_ADDR', 'CITY', 'ZIPCODE', 'STATE']
       },
       {
-        name: 'Collin County',
+        name: 'Collin County (CCAD)',
         url: 'https://services2.arcgis.com/uXyoacYrZTPTKD3R/ArcGIS/rest/services/CCAD_Parcel_Feature_Set/FeatureServer/4',
         parcelField: 'propID',
         ownerField: 'ownerName',
@@ -50,36 +50,36 @@ export const STATES: StateConfig[] = [
         outFields: ['propID', 'ownerName', 'ownerAddrLine1', 'ownerAddrCity', 'ownerAddrState', 'ownerAddrZip', 'situsConcat', 'situsCity', 'situsZip']
       },
       {
-        name: 'Denton County',
-        url: 'https://maps.cityofdenton.com/server/rest/services/MapViewer/DCAD_Parcels/MapServer/0',
-        parcelField: 'prop_id',
-        ownerField: 'owner_name',
-        mailingAddressField: 'addr_line1',
-        mailingCityField: 'addr_city',
-        mailingStateField: 'addr_state',
-        mailingZipField: 'addr_zip',
-        situsField: 'situs',
-        cityField: 'situs_city',
-        zipField: 'situs_zip',
-        outFields: ['prop_id', 'owner_name', 'addr_line1', 'addr_city', 'addr_state', 'addr_zip', 'situs', 'situs_city', 'situs_zip', 'situs_state']
-      },
-      // Houston Metro
-      {
-        name: 'Harris County',
-        url: 'https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0',
-        parcelField: 'HCAD_NUM',
-        ownerField: 'OWNER',
+        name: 'Denton County (DCAD)',
+        url: 'https://gis.dentoncounty.gov/arcgis/rest/services/County_parcels/MapServer/0',
+        parcelField: 'PROP_ID',
+        ownerField: 'OWNER_NAME',
         mailingAddressField: 'MAIL_ADDR',
         mailingCityField: 'MAIL_CITY',
         mailingStateField: 'MAIL_STATE',
         mailingZipField: 'MAIL_ZIP',
-        situsField: 'SITUS',
-        cityField: 'CITY',
-        zipField: 'ZIP',
-        outFields: ['HCAD_NUM', 'OWNER', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS', 'CITY', 'ZIP', 'LEGAL1', 'MARKET_VALUE', 'APPRAISED_VALUE']
+        situsField: 'SITUS_ADDR',
+        cityField: 'SITUS_CITY',
+        zipField: 'SITUS_ZIP',
+        outFields: ['PROP_ID', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP', 'LEGAL_DESC', 'MARKET_VALUE']
+      },
+      // Houston Metro
+      {
+        name: 'Harris County (HCAD)',
+        url: 'https://www.gis.hctx.net/arcgis/rest/services/HCAD/Parcels/MapServer/0',
+        parcelField: 'HCAD_NUM',
+        ownerField: 'owner_name_1',
+        mailingAddressField: 'mail_addr_1',
+        mailingCityField: 'mail_city',
+        mailingStateField: 'mail_state',
+        mailingZipField: 'mail_zip',
+        situsField: 'site_addr_1',
+        cityField: 'site_addr_3',
+        zipField: 'site_addr_4',
+        outFields: ['HCAD_NUM', 'owner_name_1', 'owner_name_2', 'mail_addr_1', 'mail_city', 'mail_state', 'mail_zip', 'site_addr_1', 'site_addr_3', 'site_addr_4', 'legal_desc', 'tot_mkt_val', 'tot_appr_val']
       },
       {
-        name: 'Fort Bend County',
+        name: 'Fort Bend County (FBCAD)',
         url: 'https://arcgisweb.fortbendcountytx.gov/arcgis/rest/services/General/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER_NAME',
@@ -93,7 +93,7 @@ export const STATES: StateConfig[] = [
         outFields: ['PROP_ID', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP', 'LEGAL_DESC', 'MARKET_VALUE']
       },
       {
-        name: 'Montgomery County',
+        name: 'Montgomery County (MCAD)',
         url: 'https://gis.mctx.org/arcgis/rest/services/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER',
@@ -108,7 +108,7 @@ export const STATES: StateConfig[] = [
       },
       // Austin Metro
       {
-        name: 'Travis County',
+        name: 'Travis County (TCAD)',
         url: 'https://taxmaps.traviscountytx.gov/arcgis/rest/services/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER_NAME',
@@ -122,22 +122,22 @@ export const STATES: StateConfig[] = [
         outFields: ['PROP_ID', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP', 'LEGAL_DESC', 'MARKET_VALUE']
       },
       {
-        name: 'Williamson County',
-        url: 'https://gis.wilco.org/arcgis/rest/services/Parcels/MapServer/0',
-        parcelField: 'PROP_ID',
-        ownerField: 'OWNER_NAME',
-        mailingAddressField: 'MAIL_ADDR',
-        mailingCityField: 'MAIL_CITY',
-        mailingStateField: 'MAIL_STATE',
-        mailingZipField: 'MAIL_ZIP',
-        situsField: 'SITUS_ADDR',
-        cityField: 'SITUS_CITY',
-        zipField: 'SITUS_ZIP',
-        outFields: ['PROP_ID', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP']
+        name: 'Williamson County (WCAD)',
+        url: 'https://gis.wilco.org/arcgis/rest/services/public/county_wcad_parcels/MapServer/0',
+        parcelField: 'prop_id',
+        ownerField: 'owner_name',
+        mailingAddressField: 'mail_addr',
+        mailingCityField: 'mail_city',
+        mailingStateField: 'mail_state',
+        mailingZipField: 'mail_zip',
+        situsField: 'situs_addr',
+        cityField: 'situs_city',
+        zipField: 'situs_zip',
+        outFields: ['prop_id', 'owner_name', 'mail_addr', 'mail_city', 'mail_state', 'mail_zip', 'situs_addr', 'situs_city', 'situs_zip', 'legal_desc', 'market_value']
       },
       // San Antonio Metro
       {
-        name: 'Bexar County',
+        name: 'Bexar County (BCAD)',
         url: 'https://maps.bexar.org/arcgis/rest/services/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER_NAME',
@@ -152,7 +152,7 @@ export const STATES: StateConfig[] = [
       },
       // El Paso
       {
-        name: 'El Paso County',
+        name: 'El Paso County (EPCAD)',
         url: 'https://gis.elpasotexas.gov/arcgis/rest/services/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER_NAME',
@@ -167,7 +167,7 @@ export const STATES: StateConfig[] = [
       },
       // Hidalgo (Rio Grande Valley)
       {
-        name: 'Hidalgo County',
+        name: 'Hidalgo County (HCAD)',
         url: 'https://gis.hidalgocounty.us/arcgis/rest/services/Parcels/MapServer/0',
         parcelField: 'PROP_ID',
         ownerField: 'OWNER_NAME',
