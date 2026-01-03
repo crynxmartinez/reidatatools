@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getCountyByName } from '@/config/scrapers'
 import { searchOSCN, OSCNCase } from '@/services/oscn'
 
+// Render scraper worker URL
+const SCRAPER_WORKER_URL = process.env.SCRAPER_WORKER_URL || 'https://rei-scraper-worker.onrender.com'
+
+// Call Render worker for Texas court scraping
+async function scrapeWithRenderWorker(county: string, type: string, fromDate: string, toDate: string) {
+  const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/texas-courts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ county, type, fromDate, toDate })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Scraper worker returned ${response.status}`)
+  }
+  
+  return await response.json()
+}
+
 // Convert OSCN cases to eviction records format
 function oscnToEvictionRecords(cases: OSCNCase[]) {
   return cases.map(c => ({
@@ -99,14 +118,27 @@ export async function POST(request: NextRequest) {
           results = oscnToEvictionRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
+        } else if (countyConfig.state === 'TX') {
+          // Texas counties - use Render worker with Puppeteer
+          console.log(`[Scrape] Calling Render worker for ${county} County, TX evictions`)
+          try {
+            const workerResponse = await scrapeWithRenderWorker(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Render Worker (Puppeteer)'
+          } catch (error: any) {
+            console.error(`[Scrape] Render worker error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County: ${error.message}`,
+                sourceUrl: countyConfig.evictions.searchUrl
+              },
+              { status: 503 }
+            )
+          }
         } else {
-          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { 
-              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
-              comingSoon: true,
-              sourceUrl: countyConfig.evictions.searchUrl
-            },
+            { error: `No scraper available for ${county} County, ${countyConfig.state}` },
             { status: 501 }
           )
         }
@@ -131,14 +163,27 @@ export async function POST(request: NextRequest) {
           results = oscnToForeclosureRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
+        } else if (countyConfig.state === 'TX') {
+          // Texas counties - use Render worker with Puppeteer
+          console.log(`[Scrape] Calling Render worker for ${county} County, TX foreclosures`)
+          try {
+            const workerResponse = await scrapeWithRenderWorker(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Render Worker (Puppeteer)'
+          } catch (error: any) {
+            console.error(`[Scrape] Render worker error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County: ${error.message}`,
+                sourceUrl: countyConfig.foreclosures.searchUrl
+              },
+              { status: 503 }
+            )
+          }
         } else {
-          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { 
-              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
-              comingSoon: true,
-              sourceUrl: countyConfig.foreclosures.searchUrl
-            },
+            { error: `No scraper available for ${county} County, ${countyConfig.state}` },
             { status: 501 }
           )
         }
@@ -163,14 +208,27 @@ export async function POST(request: NextRequest) {
           results = oscnToProbateRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
+        } else if (countyConfig.state === 'TX') {
+          // Texas counties - use Render worker with Puppeteer
+          console.log(`[Scrape] Calling Render worker for ${county} County, TX probate`)
+          try {
+            const workerResponse = await scrapeWithRenderWorker(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Render Worker (Puppeteer)'
+          } catch (error: any) {
+            console.error(`[Scrape] Render worker error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County: ${error.message}`,
+                sourceUrl: countyConfig.probate.searchUrl
+              },
+              { status: 503 }
+            )
+          }
         } else {
-          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { 
-              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
-              comingSoon: true,
-              sourceUrl: countyConfig.probate.searchUrl
-            },
+            { error: `No scraper available for ${county} County, ${countyConfig.state}` },
             { status: 501 }
           )
         }
