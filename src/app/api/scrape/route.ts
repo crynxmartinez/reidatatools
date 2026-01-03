@@ -100,9 +100,13 @@ export async function POST(request: NextRequest) {
           isRealData = true
           dataSource = 'OSCN'
         } else {
-          // No real data source available for this county
+          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { error: `Real-time eviction data not yet available for ${county} County, ${countyConfig.state}. Currently only Oklahoma counties are supported.` },
+            { 
+              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
+              comingSoon: true,
+              sourceUrl: countyConfig.evictions.searchUrl
+            },
             { status: 501 }
           )
         }
@@ -128,9 +132,13 @@ export async function POST(request: NextRequest) {
           isRealData = true
           dataSource = 'OSCN'
         } else {
-          // No real data source available for this county
+          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { error: `Real-time foreclosure data not yet available for ${county} County, ${countyConfig.state}. Currently only Oklahoma counties are supported.` },
+            { 
+              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
+              comingSoon: true,
+              sourceUrl: countyConfig.foreclosures.searchUrl
+            },
             { status: 501 }
           )
         }
@@ -156,9 +164,13 @@ export async function POST(request: NextRequest) {
           isRealData = true
           dataSource = 'OSCN'
         } else {
-          // No real data source available for this county
+          // Texas counties need browser automation - coming soon
           return NextResponse.json(
-            { error: `Real-time probate data not yet available for ${county} County, ${countyConfig.state}. Currently only Oklahoma counties are supported.` },
+            { 
+              error: `${county} County, ${countyConfig.state} requires browser automation for court records. This feature is coming soon. Currently, real-time data is available for Oklahoma counties via OSCN.`,
+              comingSoon: true,
+              sourceUrl: countyConfig.probate.searchUrl
+            },
             { status: 501 }
           )
         }
