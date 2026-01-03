@@ -81,11 +81,18 @@ async function queryByParcel(
   county: CountyConfig,
   parcelId: string
 ): Promise<PropertyData | null> {
+  // Normalize parcel ID - try with and without dashes
+  const parcelIdNoDashes = parcelId.replace(/-/g, '')
+  const parcelIdClean = parcelId.replace(/'/g, "''")
+  const parcelIdNoDashesClean = parcelIdNoDashes.replace(/'/g, "''")
+  
   // Try multiple query formats for better matching
   const queries = [
-    `${county.parcelField} = '${parcelId.replace(/'/g, "''")}'`,
-    `UPPER(${county.parcelField}) = '${parcelId.toUpperCase().replace(/'/g, "''")}'`,
-    `${county.parcelField} LIKE '%${parcelId.replace(/'/g, "''")}%'`
+    `${county.parcelField} = '${parcelIdClean}'`,
+    `${county.parcelField} = '${parcelIdNoDashesClean}'`,
+    `UPPER(${county.parcelField}) = '${parcelIdClean.toUpperCase()}'`,
+    `UPPER(${county.parcelField}) = '${parcelIdNoDashesClean.toUpperCase()}'`,
+    `${county.parcelField} LIKE '%${parcelIdNoDashesClean}%'`
   ]
   
   console.log(`[${county.name}] Trying parcel ID:`, parcelId)
