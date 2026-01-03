@@ -41,59 +41,13 @@ async function scrapeWithScrapeDo(targetUrl: string): Promise<string> {
     
     // Check if domain is blocked on free tier
     if (errorText.includes('disabled the target domain for free packages')) {
-      throw new Error('This site requires a paid Scrape.do plan. Using demo data instead.')
+      throw new Error('This site requires a paid Scrape.do plan. Please upgrade your Scrape.do account or use a different skip trace API.')
     }
     
     throw new Error(`Scrape.do returned ${response.status}: ${response.statusText}`)
   }
   
   return await response.text()
-}
-
-// Generate realistic demo data when scraping is not available
-function generateDemoResults(searchType: string, params: any, source: string): SkipTraceResult[] {
-  const { firstName, lastName, city, state, street, phone } = params
-  
-  const firstNames = ['John', 'Mary', 'Robert', 'Patricia', 'Michael', 'Jennifer', 'William', 'Linda']
-  const lastNames = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia', 'Miller', 'Davis']
-  const streets = ['Main St', 'Oak Ave', 'Elm Dr', 'Cedar Ln', 'Pine Rd', 'Maple Blvd']
-  const cities = ['Dallas', 'Houston', 'Austin', 'San Antonio', 'Fort Worth']
-  
-  const results: SkipTraceResult[] = []
-  const numResults = Math.floor(Math.random() * 3) + 1
-  
-  for (let i = 0; i < numResults; i++) {
-    const name = searchType === 'name' 
-      ? `${firstName} ${lastName}`
-      : `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastNames[Math.floor(Math.random() * lastNames.length)]}`
-    
-    const age = Math.floor(Math.random() * 40) + 25
-    
-    results.push({
-      name,
-      age,
-      addresses: [{
-        street: street || `${Math.floor(Math.random() * 9000) + 1000} ${streets[Math.floor(Math.random() * streets.length)]}`,
-        city: city || cities[Math.floor(Math.random() * cities.length)],
-        state: state || 'TX',
-        zip: `${Math.floor(Math.random() * 90000) + 10000}`,
-        current: true
-      }],
-      phones: [
-        { number: phone || `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}` },
-        { number: `(${Math.floor(Math.random() * 900) + 100}) ${Math.floor(Math.random() * 900) + 100}-${Math.floor(Math.random() * 9000) + 1000}` }
-      ],
-      emails: [`${name.toLowerCase().replace(' ', '.')}@email.com`],
-      relatives: [
-        `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastName || lastNames[Math.floor(Math.random() * lastNames.length)]}`,
-        `${firstNames[Math.floor(Math.random() * firstNames.length)]} ${lastName || lastNames[Math.floor(Math.random() * lastNames.length)]}`
-      ],
-      source: `${source} (Demo)`,
-      sourceUrl: '#'
-    })
-  }
-  
-  return results
 }
 
 function extractText(html: string): string {
@@ -287,9 +241,9 @@ export async function POST(request: NextRequest) {
               break
           }
         } catch (scrapeError: any) {
-          // If scraping fails (e.g., domain blocked on free tier), use demo data
-          console.log(`[SkipTrace] Scraping failed for ${sourceId}, using demo data: ${scrapeError.message}`)
-          results = generateDemoResults(searchType, searchParams, sourceNames[sourceId] || sourceId)
+          // If scraping fails, report the error - no demo data
+          console.error(`[SkipTrace] Scraping failed for ${sourceId}: ${scrapeError.message}`)
+          errors.push(`${sourceNames[sourceId] || sourceId}: ${scrapeError.message}`)
         }
         
         console.log(`[SkipTrace] Found ${results.length} results from ${sourceId}`)
