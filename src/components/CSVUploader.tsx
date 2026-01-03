@@ -5,6 +5,7 @@ import { Upload, FileText, AlertCircle } from 'lucide-react'
 import Papa from 'papaparse'
 import { SearchType, PropertyData, CSVRow } from '@/types'
 import { processPropertyData } from '@/services/arcgis'
+import ColumnMapper from './ColumnMapper'
 
 interface CSVUploaderProps {
   selectedState: string
@@ -12,6 +13,11 @@ interface CSVUploaderProps {
   searchType: SearchType
   onResults: (results: PropertyData[]) => void
   onProcessingChange: (isProcessing: boolean) => void
+}
+
+interface ParsedCSV {
+  headers: string[]
+  data: Record<string, string>[]
 }
 
 export default function CSVUploader({ 
@@ -25,18 +31,9 @@ export default function CSVUploader({
   const [fileName, setFileName] = useState<string>('')
   const [error, setError] = useState<string>('')
   const [progress, setProgress] = useState<{ current: number; total: number } | null>(null)
+  const [showMapper, setShowMapper] = useState(false)
+  const [parsedCSV, setParsedCSV] = useState<ParsedCSV | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const validateHeaders = (headers: string[]): boolean => {
-    const normalizedHeaders = headers.map(h => h.toLowerCase().trim())
-    
-    if (searchType === 'address') {
-      const required = ['property address', 'property city', 'property state', 'property zip']
-      return required.every(req => normalizedHeaders.includes(req))
-    } else {
-      return normalizedHeaders.includes('parcel id')
-    }
-  }
 
   const handleFile = async (file: File) => {
     if (!selectedState) {
@@ -46,74 +43,84 @@ export default function CSVUploader({
 
     setError('')
     setFileName(file.name)
-    onProcessingChange(true)
 
     Papa.parse(file, {
       header: true,
       skipEmptyLines: true,
       complete: async (results) => {
-        const data = results.data as CSVRow[]
+        const data = results.data as Record<string, string>[]
         
         if (data.length === 0) {
           setError('CSV file is empty')
-          onProcessingChange(false)
           return
         }
 
         const headers = Object.keys(data[0])
-        if (!validateHeaders(headers)) {
-          setError(
-            searchType === 'address'
-              ? 'Invalid CSV headers. Required: property address, property city, property state, property zip'
-              : 'Invalid CSV header. Required: parcel id'
-          )
-          onProcessingChange(false)
-          return
-        }
-
-        try {
-          setProgress({ current: 0, total: data.length })
-          const processedResults: PropertyData[] = []
-
-          for (let i = 0; i < data.length; i++) {
-            const row = data[i]
-            setProgress({ current: i + 1, total: data.length })
-
-            try {
-              const result = await processPropertyData(
-                selectedState,
-                selectedCounty,
-                searchType,
-                row
-              )
-              processedResults.push(result)
-            } catch (rowError: any) {
-              console.error(`Error processing row ${i + 1}:`, rowError)
-              // Add error result for this row
-              processedResults.push({
-                id: Math.random().toString(36),
-                source: selectedState,
-                status: 'error',
-                inputParcelId: row['parcel id'],
-                inputAddress: row['property address'],
-              })
-            }
-          }
-
-          onResults(processedResults)
-          setProgress(null)
-          onProcessingChange(false)
-        } catch (err) {
-          setError('Error processing CSV: ' + (err instanceof Error ? err.message : 'Unknown error'))
-          onProcessingChange(false)
-          setProgress(null)
-        }
+        
+        // Store parsed data and show column mapper
+        setParsedCSV({ headers, data })
+        setShowMapper(true)
       },
       error: (error) => {
         setError('Error parsing CSV: ' + error.message)
-        onProcessingChange(false)
       }
     })
+  }
+
+  const handleMappingComplete = async (mapping: Record<string, string>) => {
+    if (!parsedCSV) return
+
+    setShowMapper(false)
+    onProcessingChange(true)
+
+    try {
+      setProgress({ current: 0, total: parsedCSV.data.length })
+      const processedResults: PropertyData[] = []
+
+      for (let i = 0; i < parsedCSV.data.length; i++) {
+        const originalRow = parsedCSV.data[i]
+        setProgress({ current: i + 1, total: parsedCSV.data.length })
+
+        // Map the row using the user's column mapping
+        const mappedRow: CSVRow = {}
+        Object.entries(mapping).forEach(([expectedKey, csvColumn]) => {
+          mappedRow[expectedKey] = originalRow[csvColumn] || ''
+        })
+
+        try {
+          const result = await processPropertyData(
+            selectedState,
+            selectedCounty,
+            searchType,
+            mappedRow
+          )
+          processedResults.push(result)
+        } catch (rowError: any) {
+          console.error(`Error processing row ${i + 1}:`, rowError)
+          processedResults.push({
+            id: Math.random().toString(36),
+            source: selectedState,
+            status: 'error',
+            inputParcelId: mappedRow['parcel id'],
+            inputAddress: mappedRow['property address'],
+          })
+        }
+      }
+
+      onResults(processedResults)
+      setProgress(null)
+      onProcessingChange(false)
+    } catch (err) {
+      setError('Error processing CSV: ' + (err instanceof Error ? err.message : 'Unknown error'))
+      onProcessingChange(false)
+      setProgress(null)
+    }
+  }
+
+  const handleMappingCancel = () => {
+    setShowMapper(false)
+    setParsedCSV(null)
+    setFileName('')
   }
 
   const handleDrop = (e: React.DragEvent) => {
@@ -144,6 +151,24 @@ export default function CSVUploader({
     }
   }
 
+  // Show column mapper if we have parsed CSV data
+  if (showMapper && parsedCSV) {
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-2">
+          <FileText className="inline w-4 h-4 mr-1" />
+          {fileName} ({parsedCSV.data.length} rows)
+        </label>
+        <ColumnMapper
+          csvHeaders={parsedCSV.headers}
+          searchType={searchType}
+          onMappingComplete={handleMappingComplete}
+          onCancel={handleMappingCancel}
+        />
+      </div>
+    )
+  }
+
   return (
     <div>
       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -172,7 +197,7 @@ export default function CSVUploader({
         
         <Upload className="w-12 h-12 mx-auto text-gray-400 mb-3" />
         
-        {fileName ? (
+        {fileName && !showMapper ? (
           <div className="flex items-center justify-center text-sm text-gray-600">
             <FileText className="w-4 h-4 mr-2" />
             {fileName}
