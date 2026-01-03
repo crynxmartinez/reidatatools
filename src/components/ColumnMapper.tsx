@@ -110,15 +110,15 @@ export default function ColumnMapper({
               <select
                 value={mapping[field.key] || ''}
                 onChange={(e) => handleMappingChange(field.key, e.target.value)}
-                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors ${
+                className={`w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none transition-colors text-gray-900 ${
                   mapping[field.key] 
                     ? 'border-green-300 bg-green-50' 
                     : 'border-gray-300 bg-white'
                 }`}
               >
-                <option value="">-- Select column --</option>
+                <option value="" className="text-gray-500 bg-white">-- Select column --</option>
                 {csvHeaders.map(header => (
-                  <option key={header} value={header}>
+                  <option key={header} value={header} className="text-gray-900 bg-white">
                     {header}
                   </option>
                 ))}
