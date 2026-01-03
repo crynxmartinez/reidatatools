@@ -147,11 +147,25 @@ export const STATES: StateConfig[] = [
   {
     code: 'MI',
     name: 'Michigan',
-    type: 'statewide',
-    url: 'https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/Michigan_Parcels_v17a/FeatureServer/0',
+    type: 'county',
+    url: '',
     counties: [
       {
-        name: 'Michigan Statewide',
+        name: 'Ingham County (VPN Required)',
+        url: 'https://tr.ingham.org/arcgis/rest/services/Equalization/Parcels/MapServer/0',
+        parcelField: 'PARCEL_ID',
+        ownerField: 'OWNER_NAME',
+        mailingAddressField: 'MAIL_ADDRESS',
+        mailingCityField: 'MAIL_CITY',
+        mailingStateField: 'MAIL_STATE',
+        mailingZipField: 'MAIL_ZIP',
+        situsField: 'SITUS_ADDRESS',
+        cityField: 'SITUS_CITY',
+        zipField: 'SITUS_ZIP',
+        outFields: ['PARCEL_ID', 'OWNER_NAME', 'MAIL_ADDRESS', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDRESS', 'SITUS_CITY', 'SITUS_ZIP', 'ASSESSED_VALUE', 'TAXABLE_VALUE', 'LAND_VALUE', 'ACREAGE']
+      },
+      {
+        name: 'Michigan Statewide (Fallback)',
         url: 'https://services3.arcgis.com/Jdnp1TjADvSDxMAX/arcgis/rest/services/Michigan_Parcels_v17a/FeatureServer/0',
         parcelField: 'PARCELNO',
         ownerField: 'OWNER1',
