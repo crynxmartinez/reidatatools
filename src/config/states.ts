@@ -10,17 +10,15 @@ export const STATES: StateConfig[] = [
       // Dallas-Fort Worth Metroplex
       {
         name: 'Dallas County (DCAD)',
-        url: 'https://maps.dcad.org/prdwa/rest/services/Property/ParcelQuery/MapServer/0',
-        parcelField: 'ACCT_NUM',
-        ownerField: 'OWNER_NAME',
-        mailingAddressField: 'MAIL_ADDR',
-        mailingCityField: 'MAIL_CITY',
-        mailingStateField: 'MAIL_STATE',
-        mailingZipField: 'MAIL_ZIP',
-        situsField: 'SITUS_ADDR',
-        cityField: 'SITUS_CITY',
-        zipField: 'SITUS_ZIP',
-        outFields: ['ACCT_NUM', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP', 'LEGAL_DESC', 'MARKET_VALUE', 'APPRAISED_VALUE']
+        url: 'https://gis.dallascityhall.com/arcgis/rest/services/Basemap/DallasTaxParcels/FeatureServer/0',
+        parcelField: 'ACCT',
+        ownerField: 'TAXPANAME1',
+        mailingAddressField: 'TAXPAADD1',
+        mailingCityField: 'TAXPACITY',
+        mailingStateField: 'TAXPASTA',
+        mailingZipField: 'TAXPAZIP',
+        cityField: 'CITY',
+        outFields: ['ACCT', 'CITY', 'COUNTY', 'ST_NUM', 'ST_DIR', 'ST_NAME', 'ST_TYPE', 'UNITID', 'TAXPANAME1', 'TAXPANAME2', 'TAXPAADD1', 'TAXPACITY', 'TAXPASTA', 'TAXPAZIP', 'LEGAL_1']
       },
       {
         name: 'Tarrant County (TAD)',
