@@ -319,6 +319,8 @@ function mapAttributesToPropertyData(
   matchScore: number
 ): PropertyData {
   let siteAddress = ''
+  let siteCity = ''
+  let siteZip = ''
   
   if (county.situsField) {
     siteAddress = attrs[county.situsField] || ''
@@ -329,8 +331,22 @@ function mapAttributesToPropertyData(
       attrs.ST_NAME,
       attrs.ST_TYPE,
       attrs.UNITID
-    ].filter(p => p && String(p).trim() !== 'None')
+    ].filter(p => p && String(p).trim() !== 'None' && String(p).trim() !== '')
     siteAddress = parts.join(' ')
+  }
+
+  // Get site city
+  if (county.cityField) {
+    siteCity = attrs[county.cityField] || ''
+  } else if (attrs.CITY) {
+    siteCity = attrs.CITY || ''
+  }
+
+  // Get site zip
+  if (county.zipField) {
+    siteZip = attrs[county.zipField] || ''
+  } else if (attrs.ZIPCODE || attrs.ZIP) {
+    siteZip = attrs.ZIPCODE || attrs.ZIP || ''
   }
 
   const mailingState = county.mailingStateField 
@@ -343,6 +359,9 @@ function mapAttributesToPropertyData(
     mailingZip = `${mailingZip}-${mailingZip4}`
   }
 
+  // Get county name
+  const countyName = attrs.COUNTY || attrs.CONAME || county.name.replace(/\s*\([^)]*\)/, '')
+
   return {
     id: Math.random().toString(36),
     source: county.name,
@@ -351,13 +370,16 @@ function mapAttributesToPropertyData(
     ...inputData,
     parcelId: attrs[county.parcelField] || '',
     siteAddress: siteAddress.trim(),
+    siteCity: siteCity.trim(),
+    siteState: 'TX',
+    siteZip: siteZip.trim(),
     ownerName: attrs[county.ownerField] || '',
     ownerName2: attrs[county.ownerField + '2'] || attrs['OWNERNME2'] || attrs['TAXPANAME2'] || '',
     mailingAddress: attrs[county.mailingAddressField] || '',
     mailingCity: attrs[county.mailingCityField] || '',
     mailingState: mailingState,
     mailingZip: mailingZip,
-    county: attrs.COUNTY || attrs.CONAME || county.name,
+    county: countyName,
     assessedValue: attrs.CNTASSDVALUE || attrs.ASSESSED_VALUE || undefined,
     landValue: attrs.LNDVALUE || attrs.LAND_VALUE || undefined,
     improvementValue: attrs.IMPVALUE || attrs.IMP_VALUE || undefined,

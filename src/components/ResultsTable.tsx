@@ -21,6 +21,9 @@ export default function ResultsTable({ results, isProcessing }: ResultsTableProp
       'Input Parcel ID': r.inputParcelId || '',
       'Parcel ID': r.parcelId || '',
       'Site Address': r.siteAddress || '',
+      'Site City': r.siteCity || '',
+      'Site State': r.siteState || '',
+      'Site Zip': r.siteZip || '',
       'Owner Name': r.ownerName || '',
       'Owner Name 2': r.ownerName2 || '',
       'Mailing Address': r.mailingAddress || '',
@@ -120,6 +123,9 @@ export default function ResultsTable({ results, isProcessing }: ResultsTableProp
                 Site Address
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                County
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                 Parcel ID
               </th>
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -160,8 +166,16 @@ export default function ResultsTable({ results, isProcessing }: ResultsTableProp
                     </div>
                   )}
                 </td>
+                <td className="px-4 py-4">
+                  <div className="text-sm text-gray-900">{result.siteAddress || '-'}</div>
+                  {result.siteCity && (
+                    <div className="text-sm text-gray-500">
+                      {result.siteCity}, {result.siteState} {result.siteZip}
+                    </div>
+                  )}
+                </td>
                 <td className="px-4 py-4 text-sm text-gray-900">
-                  {result.siteAddress || '-'}
+                  {result.county || '-'}
                 </td>
                 <td className="px-4 py-4 text-sm text-gray-900">
                   {result.parcelId || '-'}

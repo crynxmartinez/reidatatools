@@ -14,6 +14,9 @@ export interface PropertyData {
   // Property details
   parcelId?: string
   siteAddress?: string
+  siteCity?: string
+  siteState?: string
+  siteZip?: string
   ownerName?: string
   ownerName2?: string
   
