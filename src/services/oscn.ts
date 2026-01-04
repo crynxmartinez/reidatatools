@@ -12,6 +12,10 @@ export interface OSCNCase {
   status: string
   county: string
   link: string
+  // Additional details from case page
+  propertyAddress?: string
+  amount?: string
+  attorneys?: string[]
 }
 
 export interface OSCNSearchParams {
@@ -250,4 +254,168 @@ export function getOSCNCounties(): string[] {
 
 export function isOSCNCounty(county: string): boolean {
   return county.toLowerCase() in OSCN_COUNTIES
+}
+
+// Fetch detailed case information from OSCN case page
+export async function fetchCaseDetails(caseLink: string): Promise<Partial<OSCNCase>> {
+  try {
+    console.log(`[OSCN] Fetching case details: ${caseLink}`)
+    
+    const response = await fetch(caseLink, {
+      method: 'GET',
+      headers: {
+        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    })
+    
+    if (!response.ok) {
+      console.error(`[OSCN] Error fetching case: ${response.status}`)
+      return {}
+    }
+    
+    const html = await response.text()
+    
+    // Extract parties (plaintiff/defendant)
+    let plaintiff = ''
+    let defendant = ''
+    
+    // Look for party section - OSCN uses tables with party info
+    const partyMatch = html.match(/Party\s+Name[\s\S]*?<table[^>]*>([\s\S]*?)<\/table>/i)
+    if (partyMatch) {
+      const partyTable = partyMatch[1]
+      // Extract plaintiff (usually first party or marked as Plaintiff)
+      const plaintiffMatch = partyTable.match(/Plaintiff[^<]*<[^>]*>([^<]+)/i) || 
+                            partyTable.match(/<td[^>]*>([^<]+)<\/td>/i)
+      if (plaintiffMatch) plaintiff = plaintiffMatch[1].trim()
+      
+      // Extract defendant
+      const defendantMatch = partyTable.match(/Defendant[^<]*<[^>]*>([^<]+)/i)
+      if (defendantMatch) defendant = defendantMatch[1].trim()
+    }
+    
+    // Alternative party extraction from case style
+    if (!plaintiff || !defendant) {
+      const styleMatch = html.match(/(?:Case\s+Style|Style)[:\s]*([^<]+)\s+(?:vs?\.?|versus)\s+([^<]+)/i)
+      if (styleMatch) {
+        plaintiff = plaintiff || styleMatch[1].trim()
+        defendant = defendant || styleMatch[2].trim()
+      }
+    }
+    
+    // Extract filing date
+    let filingDate = ''
+    const dateMatch = html.match(/(?:Filed|Filing\s+Date)[:\s]*(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})/i)
+    if (dateMatch) filingDate = dateMatch[1]
+    
+    // Extract property address - look for address patterns in the case
+    let propertyAddress = ''
+    const addressPatterns = [
+      /(?:Property|Real\s+Property|Subject\s+Property|Address)[:\s]*([^<\n]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)[^<\n]*)/i,
+      /(\d+\s+[A-Za-z0-9\s]+(?:Street|St|Avenue|Ave|Road|Rd|Drive|Dr|Lane|Ln|Boulevard|Blvd|Way|Court|Ct)[^<,\n]*(?:,\s*[A-Za-z\s]+,?\s*(?:OK|Oklahoma)\s*\d{5})?)/i
+    ]
+    for (const pattern of addressPatterns) {
+      const match = html.match(pattern)
+      if (match) {
+        propertyAddress = match[1].trim().replace(/\s+/g, ' ')
+        break
+      }
+    }
+    
+    // Extract amount/judgment amount
+    let amount = ''
+    const amountPatterns = [
+      /(?:Amount|Judgment|Principal|Claim)[:\s]*\$?([\d,]+\.?\d*)/i,
+      /\$([\d,]+\.?\d*)/
+    ]
+    for (const pattern of amountPatterns) {
+      const match = html.match(pattern)
+      if (match) {
+        amount = '$' + match[1]
+        break
+      }
+    }
+    
+    // Extract judge
+    let judge = ''
+    const judgeMatch = html.match(/(?:Judge|Assigned\s+Judge)[:\s]*([^<\n]+)/i)
+    if (judgeMatch) judge = judgeMatch[1].trim()
+    
+    // Extract status/disposition
+    let status = 'Filed'
+    const statusPatterns = [
+      /(?:Disposition|Status|Case\s+Status)[:\s]*([^<\n]+)/i,
+      /(?:DISPOSED|CLOSED|DISMISSED|JUDGMENT)/i
+    ]
+    for (const pattern of statusPatterns) {
+      const match = html.match(pattern)
+      if (match) {
+        status = match[1] ? match[1].trim() : match[0].trim()
+        break
+      }
+    }
+    
+    // Extract attorneys
+    const attorneys: string[] = []
+    const attorneyMatches = html.matchAll(/(?:Attorney|Counsel)[:\s]*([^<\n]+)/gi)
+    for (const match of attorneyMatches) {
+      const attorney = match[1].trim()
+      if (attorney && !attorneys.includes(attorney)) {
+        attorneys.push(attorney)
+      }
+    }
+    
+    return {
+      plaintiff: plaintiff || undefined,
+      defendant: defendant || undefined,
+      filingDate: filingDate || undefined,
+      propertyAddress: propertyAddress || undefined,
+      amount: amount || undefined,
+      judge: judge || undefined,
+      status,
+      attorneys: attorneys.length > 0 ? attorneys : undefined
+    }
+    
+  } catch (error: any) {
+    console.error(`[OSCN] Error fetching case details: ${error.message}`)
+    return {}
+  }
+}
+
+// Enhanced search that fetches case details
+export async function searchOSCNWithDetails(params: OSCNSearchParams, maxDetails: number = 25): Promise<OSCNCase[]> {
+  // First get basic search results
+  const cases = await searchOSCN(params)
+  
+  // Then fetch details for each case (limited to avoid too many requests)
+  const casesToFetch = cases.slice(0, maxDetails)
+  
+  console.log(`[OSCN] Fetching details for ${casesToFetch.length} cases...`)
+  
+  // Fetch details in batches to avoid overwhelming the server
+  const batchSize = 5
+  for (let i = 0; i < casesToFetch.length; i += batchSize) {
+    const batch = casesToFetch.slice(i, i + batchSize)
+    
+    await Promise.all(batch.map(async (caseItem) => {
+      const details = await fetchCaseDetails(caseItem.link)
+      
+      // Merge details into case
+      if (details.plaintiff) caseItem.plaintiff = details.plaintiff
+      if (details.defendant) caseItem.defendant = details.defendant
+      if (details.filingDate) caseItem.filingDate = details.filingDate
+      if (details.propertyAddress) caseItem.propertyAddress = details.propertyAddress
+      if (details.amount) caseItem.amount = details.amount
+      if (details.judge) caseItem.judge = details.judge
+      if (details.status) caseItem.status = details.status
+      if (details.attorneys) caseItem.attorneys = details.attorneys
+    }))
+    
+    // Small delay between batches
+    if (i + batchSize < casesToFetch.length) {
+      await new Promise(resolve => setTimeout(resolve, 500))
+    }
+  }
+  
+  return cases
 }

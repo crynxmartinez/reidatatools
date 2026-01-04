@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCountyByName } from '@/config/scrapers'
-import { searchOSCN, OSCNCase } from '@/services/oscn'
+import { searchOSCN, searchOSCNWithDetails, OSCNCase } from '@/services/oscn'
 
 // Render scraper worker URL
 const SCRAPER_WORKER_URL = process.env.SCRAPER_WORKER_URL || 'https://rei-scraper-worker.onrender.com'
@@ -44,8 +44,8 @@ function oscnToForeclosureRecords(cases: OSCNCase[]) {
     auctionDate: '',
     owner: c.defendant,
     lender: c.plaintiff,
-    address: 'See Case Details',
-    amount: '',
+    address: c.propertyAddress || 'See Case Details',
+    amount: c.amount || '',
     status: c.status,
     county: c.county,
     caseType: c.caseTypeDescription,
@@ -61,8 +61,8 @@ function oscnToProbateRecords(cases: OSCNCase[]) {
     decedent: c.defendant || 'See Case Details',
     executor: c.plaintiff || 'See Case Details',
     caseType: c.caseTypeDescription,
-    propertyAddress: 'See Case Details',
-    estimatedValue: '',
+    propertyAddress: c.propertyAddress || 'See Case Details',
+    estimatedValue: c.amount || '',
     status: c.status,
     county: c.county,
     link: c.link
@@ -153,13 +153,13 @@ export async function POST(request: NextRequest) {
         }
         
         if (isOSCN && countyConfig.foreclosures.method === 'oscn') {
-          console.log(`[Scrape] Fetching OSCN foreclosures for ${county} County, OK`)
-          const oscnCases = await searchOSCN({
+          console.log(`[Scrape] Fetching OSCN foreclosures with details for ${county} County, OK`)
+          const oscnCases = await searchOSCNWithDetails({
             county: countyConfig.oscnCode!,
             caseTypes: countyConfig.foreclosures.caseTypes || ['CV', 'CJ'],
             fromDate,
             toDate
-          })
+          }, 25) // Fetch details for up to 25 cases
           results = oscnToForeclosureRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
@@ -198,13 +198,13 @@ export async function POST(request: NextRequest) {
         }
         
         if (isOSCN && countyConfig.probate.method === 'oscn') {
-          console.log(`[Scrape] Fetching OSCN probate for ${county} County, OK`)
-          const oscnCases = await searchOSCN({
+          console.log(`[Scrape] Fetching OSCN probate with details for ${county} County, OK`)
+          const oscnCases = await searchOSCNWithDetails({
             county: countyConfig.oscnCode!,
             caseTypes: countyConfig.probate.caseTypes || ['PB', 'PG'],
             fromDate,
             toDate
-          })
+          }, 25) // Fetch details for up to 25 cases
           results = oscnToProbateRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
