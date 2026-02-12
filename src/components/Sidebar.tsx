@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Database, Home, AlertTriangle, FileText, ChevronDown, ChevronRight, Search, Users } from 'lucide-react'
+import { Database, Home, Target, ChevronDown, ChevronRight, Users } from 'lucide-react'
 import clsx from 'clsx'
 import { useState } from 'react'
 
@@ -10,21 +10,15 @@ const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
   { name: 'Data Extractor', href: '/data-extractor', icon: Database },
   { 
-    name: 'Property Leads', 
-    icon: AlertTriangle,
+    name: 'Lead Sources', 
+    icon: Target,
     children: [
-      { name: 'Code Violations', href: '/property-leads/code-violations' },
-      { name: 'Building Permits', href: '/property-leads/permits' },
-      { name: 'Fire Calls', href: '/property-leads/fire-calls' },
-    ]
-  },
-  { 
-    name: 'Scraper', 
-    icon: Search,
-    children: [
-      { name: 'Evictions', href: '/scraper/evictions' },
-      { name: 'Foreclosures', href: '/scraper/foreclosures' },
-      { name: 'Probate', href: '/scraper/probate' },
+      { name: 'Code Violations', href: '/lead-sources/code-violations' },
+      { name: 'Building Permits', href: '/lead-sources/permits' },
+      { name: 'Fire Calls', href: '/lead-sources/fire-calls' },
+      { name: 'Evictions', href: '/lead-sources/evictions' },
+      { name: 'Foreclosures', href: '/lead-sources/foreclosures' },
+      { name: 'Probate', href: '/lead-sources/probate' },
     ]
   },
   { 
@@ -40,7 +34,7 @@ const navigation = [
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const [expandedItems, setExpandedItems] = useState<string[]>(['Property Leads'])
+  const [expandedItems, setExpandedItems] = useState<string[]>(['Lead Sources'])
 
   const toggleExpand = (name: string) => {
     setExpandedItems(prev => 
