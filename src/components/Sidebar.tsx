@@ -15,6 +15,7 @@ const navigation = [
     children: [
       { name: 'Code Violations', href: '/property-leads/code-violations' },
       { name: 'Building Permits', href: '/property-leads/permits' },
+      { name: 'Fire Calls', href: '/property-leads/fire-calls' },
     ]
   },
   { 

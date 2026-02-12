@@ -21,6 +21,22 @@ async function scrapeWithRenderWorker(county: string, type: string, fromDate: st
   return await response.json()
 }
 
+// Call Render worker for Arizona court/recorder scraping
+async function scrapeArizona(county: string, type: string, fromDate: string, toDate: string) {
+  const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/arizona-courts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ county, type, fromDate, toDate })
+  })
+  
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Arizona scraper returned ${response.status}`)
+  }
+  
+  return await response.json()
+}
+
 // Convert OSCN cases to eviction records format
 function oscnToEvictionRecords(cases: OSCNCase[]) {
   return cases.map(c => ({
@@ -136,6 +152,23 @@ export async function POST(request: NextRequest) {
               { status: 503 }
             )
           }
+        } else if (countyConfig.state === 'AZ') {
+          console.log(`[Scrape] Calling Arizona scraper for ${county} County, AZ evictions`)
+          try {
+            const workerResponse = await scrapeArizona(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Arizona Courts (Puppeteer)'
+          } catch (error: any) {
+            console.error(`[Scrape] Arizona scraper error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County, AZ: ${error.message}`,
+                sourceUrl: countyConfig.evictions.searchUrl
+              },
+              { status: 503 }
+            )
+          }
         } else {
           return NextResponse.json(
             { error: `No scraper available for ${county} County, ${countyConfig.state}` },
@@ -176,6 +209,23 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
               { 
                 error: `Failed to scrape ${county} County: ${error.message}`,
+                sourceUrl: countyConfig.foreclosures.searchUrl
+              },
+              { status: 503 }
+            )
+          }
+        } else if (countyConfig.state === 'AZ') {
+          console.log(`[Scrape] Calling Arizona scraper for ${county} County, AZ foreclosures`)
+          try {
+            const workerResponse = await scrapeArizona(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Maricopa County Recorder'
+          } catch (error: any) {
+            console.error(`[Scrape] Arizona scraper error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County, AZ: ${error.message}`,
                 sourceUrl: countyConfig.foreclosures.searchUrl
               },
               { status: 503 }
@@ -226,6 +276,23 @@ export async function POST(request: NextRequest) {
               { status: 503 }
             )
           }
+        } else if (countyConfig.state === 'AZ') {
+          console.log(`[Scrape] Calling Arizona scraper for ${county} County, AZ probate`)
+          try {
+            const workerResponse = await scrapeArizona(county, type, fromDate, toDate)
+            results = workerResponse.results || []
+            isRealData = results.length > 0
+            dataSource = 'Maricopa County Superior Court'
+          } catch (error: any) {
+            console.error(`[Scrape] Arizona scraper error: ${error.message}`)
+            return NextResponse.json(
+              { 
+                error: `Failed to scrape ${county} County, AZ: ${error.message}`,
+                sourceUrl: countyConfig.probate.searchUrl
+              },
+              { status: 503 }
+            )
+          }
         } else {
           return NextResponse.json(
             { error: `No scraper available for ${county} County, ${countyConfig.state}` },
@@ -250,7 +317,7 @@ export async function POST(request: NextRequest) {
       results,
       isRealData,
       dataSource,
-      note: `Real data from ${dataSource} - Oklahoma State Courts Network`
+      note: isRealData ? `Real data from ${dataSource}` : `No results from ${dataSource}`
     })
 
   } catch (error: any) {

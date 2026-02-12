@@ -243,6 +243,29 @@ export const SCRAPER_COUNTIES: ScraperCounty[] = [
       requiresJs: false,
       caseTypes: ['PB', 'PG']
     }
+  },
+  // Arizona Counties
+  {
+    name: 'Maricopa',
+    state: 'AZ',
+    evictions: {
+      searchUrl: 'https://justicecourts.maricopa.gov/case-search',
+      method: 'form',
+      requiresJs: true,
+      caseTypes: ['FED'] // Forcible Entry & Detainer
+    },
+    foreclosures: {
+      searchUrl: 'https://recorder.maricopa.gov/recording/document-search.html',
+      method: 'form',
+      requiresJs: true,
+      caseTypes: ['NTS'] // Notice of Trustee Sale
+    },
+    probate: {
+      searchUrl: 'https://www.superiorcourt.maricopa.gov/docket/index.asp',
+      method: 'form',
+      requiresJs: true,
+      caseTypes: ['PB'] // Probate
+    }
   }
 ]
 

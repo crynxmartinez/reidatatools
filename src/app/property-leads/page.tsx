@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, FileText, ArrowRight } from 'lucide-react'
+import { AlertTriangle, FileText, Flame, ArrowRight } from 'lucide-react'
+import { getCKANCitiesGroupedByState } from '@/config/ckan'
 import { getCitiesGroupedByState } from '@/config/socrata'
 
 export default function PropertyLeadsPage() {
@@ -14,7 +15,7 @@ export default function PropertyLeadsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Code Violations Card */}
         <Link href="/property-leads/code-violations" className="block">
           <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 border-orange-500">
@@ -60,6 +61,31 @@ export default function PropertyLeadsPage() {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500">
                 Available cities: {Object.entries(getCitiesGroupedByState('buildingPermits')).map(([state, cities]) => `${state}: ${cities.map(c => c.name).join(', ')}`).join(' | ') || 'None configured'}
+              </p>
+            </div>
+          </div>
+        </Link>
+
+        {/* Fire Calls Card */}
+        <Link href="/property-leads/fire-calls" className="block">
+          <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 border-red-500">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center">
+                <div className="p-3 bg-red-100 rounded-lg">
+                  <Flame className="w-6 h-6 text-red-600" />
+                </div>
+                <div className="ml-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Fire Calls</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Find fire-damaged properties - potential investment opportunities
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-gray-400" />
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                Available cities: {Object.entries(getCKANCitiesGroupedByState('fireCalls')).map(([state, cities]) => `${state}: ${cities.map(c => c.name).join(', ')}`).join(' | ') || 'None configured'}
               </p>
             </div>
           </div>
