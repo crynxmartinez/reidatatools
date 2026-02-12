@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { Search, Download, Home, Loader2, ExternalLink } from 'lucide-react'
+import { Search, Download, Home, Loader2, ExternalLink, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
 import { SCRAPER_COUNTIES, getCountiesWithEvictions } from '@/config/scrapers'
 import Papa from 'papaparse'
 
@@ -17,6 +17,17 @@ interface EvictionRecord {
   link?: string
 }
 
+interface ParcelResult {
+  parcelId: string
+  address: string
+  ownerName: string
+  mailingAddress: string
+  mailingCity: string
+  mailingState: string
+  mailingZip: string
+  assessedValue: string
+}
+
 export default function EvictionsPage() {
   const [selectedCounty, setSelectedCounty] = useState('')
   const [fromDate, setFromDate] = useState('')
@@ -26,6 +37,10 @@ export default function EvictionsPage() {
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
   const [progress, setProgress] = useState('')
+
+  const [expandedRows, setExpandedRows] = useState<Record<string, boolean>>({})
+  const [parcelResults, setParcelResults] = useState<Record<string, ParcelResult[]>>({})
+  const [parcelLoading, setParcelLoading] = useState<Record<string, boolean>>({})
 
   const counties = getCountiesWithEvictions()
 
@@ -176,6 +191,62 @@ export default function EvictionsPage() {
   const getCountyUrl = () => {
     const county = SCRAPER_COUNTIES.find(c => c.name === selectedCounty)
     return county?.evictions?.searchUrl || '#'
+  }
+
+  // Determine state code from selected county for parcel lookup
+  const getStateCode = () => {
+    const county = SCRAPER_COUNTIES.find(c => c.name === selectedCounty)
+    return county?.state || 'OK'
+  }
+
+  const lookupOwner = async (record: EvictionRecord, index: number) => {
+    const key = record.caseNumber || `row-${index}`
+    
+    // Toggle if already expanded
+    if (expandedRows[key]) {
+      setExpandedRows(prev => ({ ...prev, [key]: false }))
+      return
+    }
+
+    // If we already have results, just expand
+    if (parcelResults[key]) {
+      setExpandedRows(prev => ({ ...prev, [key]: true }))
+      return
+    }
+
+    // Use plaintiff name as address search (plaintiff is usually the landlord/property owner)
+    // Or use the address field if available
+    const searchAddress = record.address && record.address !== 'See Case Details'
+      ? record.address
+      : record.plaintiff
+
+    if (!searchAddress || searchAddress === 'See Case Details') {
+      setParcelResults(prev => ({ ...prev, [key]: [] }))
+      setExpandedRows(prev => ({ ...prev, [key]: true }))
+      return
+    }
+
+    setParcelLoading(prev => ({ ...prev, [key]: true }))
+    setExpandedRows(prev => ({ ...prev, [key]: true }))
+
+    try {
+      const response = await fetch('/api/parcel-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streetAddress: searchAddress,
+          stateCode: getStateCode(),
+          countyIndex: '0'
+        })
+      })
+
+      const data = await response.json()
+      setParcelResults(prev => ({ ...prev, [key]: data.parcels || [] }))
+    } catch (err) {
+      setParcelResults(prev => ({ ...prev, [key]: [] }))
+    } finally {
+      setParcelLoading(prev => ({ ...prev, [key]: false }))
+    }
   }
 
   return (
@@ -340,50 +411,124 @@ export default function EvictionsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {results.map((record, index) => (
-                  <tr key={record.caseNumber || index} className="hover:bg-gray-50">
-                    <td className="px-4 py-4 text-sm text-gray-900 font-medium">
-                      {record.link ? (
-                        <a 
-                          href={record.link} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          {record.caseNumber}
-                        </a>
-                      ) : (
-                        record.caseNumber
+                {results.map((record, index) => {
+                  const key = record.caseNumber || `row-${index}`
+                  const isExpanded = expandedRows[key]
+                  const parcels = parcelResults[key]
+                  const isLookingUp = parcelLoading[key]
+
+                  return (
+                    <>
+                      <tr key={key} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 text-sm text-gray-900 font-medium">
+                          {record.link ? (
+                            <a 
+                              href={record.link} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                              {record.caseNumber}
+                            </a>
+                          ) : (
+                            record.caseNumber
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {record.filingDate}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {record.plaintiff}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {record.defendant}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-900 font-medium">
+                          {record.address}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            record.status?.toLowerCase().includes('dismiss') || record.status?.toLowerCase().includes('closed')
+                              ? 'bg-gray-100 text-gray-800'
+                              : record.status?.toLowerCase().includes('judgment') || record.status?.toLowerCase().includes('final')
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {record.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <button
+                            onClick={() => lookupOwner(record, index)}
+                            disabled={isLookingUp}
+                            className="flex items-center px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                          >
+                            {isLookingUp ? (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            ) : (
+                              <MapPin className="w-3 h-3 mr-1" />
+                            )}
+                            {isExpanded ? 'Hide' : 'Owner'}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${key}-parcels`}>
+                          <td colSpan={7} className="px-4 py-3 bg-blue-50">
+                            {isLookingUp ? (
+                              <div className="flex items-center justify-center py-4">
+                                <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+                                <span className="ml-2 text-sm text-blue-600">Searching property records...</span>
+                              </div>
+                            ) : parcels && parcels.length > 0 ? (
+                              <div>
+                                <p className="text-xs font-medium text-blue-800 mb-2">
+                                  Found {parcels.length} matching properties:
+                                </p>
+                                <table className="min-w-full text-xs">
+                                  <thead>
+                                    <tr className="text-left text-blue-700">
+                                      <th className="pr-4 py-1">Address</th>
+                                      <th className="pr-4 py-1">Owner</th>
+                                      <th className="pr-4 py-1">Mailing Address</th>
+                                      <th className="pr-4 py-1">Parcel ID</th>
+                                      <th className="pr-4 py-1">Value</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {parcels.map((p: ParcelResult, pi: number) => (
+                                      <tr key={pi} className="border-t border-blue-100">
+                                        <td className="pr-4 py-1.5 font-medium text-gray-900">{p.address}</td>
+                                        <td className="pr-4 py-1.5 text-gray-800">{p.ownerName}</td>
+                                        <td className="pr-4 py-1.5 text-gray-600">
+                                          {[p.mailingAddress, p.mailingCity, p.mailingState, p.mailingZip].filter(Boolean).join(', ')}
+                                        </td>
+                                        <td className="pr-4 py-1.5 text-gray-500">{p.parcelId}</td>
+                                        <td className="pr-4 py-1.5 text-gray-600">
+                                          {p.assessedValue ? `$${Number(p.assessedValue).toLocaleString()}` : ''}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 py-2">
+                                No property records found. Try searching manually in the Data Extractor.
+                              </p>
+                            )}
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600">
-                      {record.filingDate}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600">
-                      {record.plaintiff}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-600">
-                      {record.defendant}
-                    </td>
-                    <td className="px-4 py-4 text-sm text-gray-900 font-medium">
-                      {record.address}
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        record.status?.toLowerCase().includes('dismiss') || record.status?.toLowerCase().includes('closed')
-                          ? 'bg-gray-100 text-gray-800'
-                          : record.status?.toLowerCase().includes('judgment') || record.status?.toLowerCase().includes('final')
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {record.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           </div>
