@@ -261,13 +261,28 @@ export async function fetchCaseDetails(caseLink: string): Promise<Partial<OSCNCa
   try {
     console.log(`[OSCN] Fetching case details: ${caseLink}`)
     
-    const response = await fetch(caseLink, {
-      method: 'GET',
-      headers: {
-        'Accept': 'text/html,application/xhtml+xml',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+    
+    let response
+    try {
+      response = await fetch(caseLink, {
+        method: 'GET',
+        headers: {
+          'Accept': 'text/html,application/xhtml+xml',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
+        signal: controller.signal
+      })
+    } catch (err: any) {
+      if (err.name === 'AbortError') {
+        console.error(`[OSCN] Timeout fetching case: ${caseLink}`)
+        return {}
       }
-    })
+      throw err
+    } finally {
+      clearTimeout(timeout)
+    }
     
     if (!response.ok) {
       console.error(`[OSCN] Error fetching case: ${response.status}`)
@@ -280,26 +295,50 @@ export async function fetchCaseDetails(caseLink: string): Promise<Partial<OSCNCa
     let plaintiff = ''
     let defendant = ''
     
-    // Look for party section - OSCN uses tables with party info
-    const partyMatch = html.match(/Party\s+Name[\s\S]*?<table[^>]*>([\s\S]*?)<\/table>/i)
-    if (partyMatch) {
-      const partyTable = partyMatch[1]
-      // Extract plaintiff (usually first party or marked as Plaintiff)
-      const plaintiffMatch = partyTable.match(/Plaintiff[^<]*<[^>]*>([^<]+)/i) || 
-                            partyTable.match(/<td[^>]*>([^<]+)<\/td>/i)
-      if (plaintiffMatch) plaintiff = plaintiffMatch[1].trim()
-      
-      // Extract defendant
-      const defendantMatch = partyTable.match(/Defendant[^<]*<[^>]*>([^<]+)/i)
-      if (defendantMatch) defendant = defendantMatch[1].trim()
+    // OSCN party extraction - multiple strategies
+    // Strategy 1: Look for Plaintiff/Defendant in party table rows
+    const plaintiffPatterns = [
+      /Plaintiff[\s\S]*?<\/td>\s*<td[^>]*>\s*<[^>]*>([^<]+)/i,
+      /Plaintiff[^<]*<[^>]*>[^<]*<[^>]*>([^<]+)/i,
+      /PLAINTIFF[\s\S]*?<a[^>]*>([^<]+)/i,
+      /Plaintiff[\s\S]*?<b>([^<]+)/i
+    ]
+    for (const pattern of plaintiffPatterns) {
+      const match = html.match(pattern)
+      if (match && match[1].trim().length > 1) {
+        plaintiff = match[1].trim()
+        break
+      }
     }
     
-    // Alternative party extraction from case style
+    const defendantPatterns = [
+      /Defendant[\s\S]*?<\/td>\s*<td[^>]*>\s*<[^>]*>([^<]+)/i,
+      /Defendant[^<]*<[^>]*>[^<]*<[^>]*>([^<]+)/i,
+      /DEFENDANT[\s\S]*?<a[^>]*>([^<]+)/i,
+      /Defendant[\s\S]*?<b>([^<]+)/i
+    ]
+    for (const pattern of defendantPatterns) {
+      const match = html.match(pattern)
+      if (match && match[1].trim().length > 1) {
+        defendant = match[1].trim()
+        break
+      }
+    }
+    
+    // Strategy 2: Extract from case style / title
     if (!plaintiff || !defendant) {
-      const styleMatch = html.match(/(?:Case\s+Style|Style)[:\s]*([^<]+)\s+(?:vs?\.?|versus)\s+([^<]+)/i)
-      if (styleMatch) {
-        plaintiff = plaintiff || styleMatch[1].trim()
-        defendant = defendant || styleMatch[2].trim()
+      const stylePatterns = [
+        /class="caseStyle"[^>]*>([^<]+?)\s+(?:vs?\.?|versus)\s+([^<]+)/i,
+        /<title>([^<]+?)\s+(?:vs?\.?|versus)\s+([^<]+?)(?:\s*-|<)/i,
+        /([A-Z][A-Z\s,\.]+?)\s+(?:vs?\.?)\s+([A-Z][A-Z\s,\.]+?)(?:<|\n)/i
+      ]
+      for (const pattern of stylePatterns) {
+        const match = html.match(pattern)
+        if (match) {
+          plaintiff = plaintiff || match[1].trim()
+          defendant = defendant || match[2].trim()
+          break
+        }
       }
     }
     

@@ -148,13 +148,13 @@ export async function POST(request: NextRequest) {
         }
         
         if (isOSCN && countyConfig.evictions.method === 'oscn') {
-          console.log(`[Scrape] Fetching OSCN evictions for ${county} County, OK`)
-          const oscnCases = await searchOSCN({
+          console.log(`[Scrape] Fetching OSCN evictions with details for ${county} County, OK`)
+          const oscnCases = await searchOSCNWithDetails({
             county: countyConfig.oscnCode!,
             caseTypes: countyConfig.evictions.caseTypes || ['SC', 'CS'],
             fromDate,
             toDate
-          })
+          }, 25)
           results = oscnToEvictionRecords(oscnCases)
           isRealData = true
           dataSource = 'OSCN'
