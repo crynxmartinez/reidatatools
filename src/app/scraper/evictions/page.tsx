@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { Search, Download, Home, Loader2, ExternalLink } from 'lucide-react'
 import { SCRAPER_COUNTIES, getCountiesWithEvictions } from '@/config/scrapers'
 import Papa from 'papaparse'
@@ -29,6 +29,12 @@ export default function EvictionsPage() {
 
   const counties = getCountiesWithEvictions()
 
+  // Check if selected county is an Oklahoma OSCN county (supports streaming)
+  const isOSCNCounty = () => {
+    const county = SCRAPER_COUNTIES.find(c => c.name === selectedCounty)
+    return county?.state === 'OK' && county?.oscnCode
+  }
+
   const handleScrape = async () => {
     if (!selectedCounty) {
       setError('Please select a county')
@@ -38,34 +44,96 @@ export default function EvictionsPage() {
     setIsLoading(true)
     setError(null)
     setHasSearched(true)
+    setResults([])
     setProgress('Connecting to county website...')
 
-    try {
-      const response = await fetch('/api/scrape', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          type: 'evictions',
-          county: selectedCounty,
-          fromDate: fromDate || getDefaultFromDate(),
-          toDate: toDate || getDefaultToDate()
+    const payload = {
+      type: 'evictions',
+      county: selectedCounty,
+      fromDate: fromDate || getDefaultFromDate(),
+      toDate: toDate || getDefaultToDate()
+    }
+
+    // Use streaming for OSCN counties
+    if (isOSCNCounty()) {
+      try {
+        const response = await fetch('/api/scrape-stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
         })
-      })
 
-      const data = await response.json()
+        if (!response.ok) {
+          const data = await response.json()
+          throw new Error(data.error || 'Failed to scrape data')
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to scrape data')
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        if (!reader) throw new Error('No response stream')
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() || ''
+
+          let currentEvent = ''
+          for (const line of lines) {
+            if (line.startsWith('event: ')) {
+              currentEvent = line.slice(7).trim()
+            } else if (line.startsWith('data: ') && currentEvent) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                if (currentEvent === 'progress') {
+                  setProgress(data.message)
+                } else if (currentEvent === 'results') {
+                  setResults(data.cases || [])
+                } else if (currentEvent === 'complete') {
+                  setResults(data.cases || [])
+                  setProgress('')
+                  setIsLoading(false)
+                } else if (currentEvent === 'error') {
+                  setError(data.message)
+                  setIsLoading(false)
+                }
+              } catch (e) {
+                // ignore parse errors in stream
+              }
+              currentEvent = ''
+            }
+          }
+        }
+      } catch (err: any) {
+        setError(err.message || 'Failed to scrape data')
+      } finally {
+        setIsLoading(false)
+        setProgress('')
       }
+    } else {
+      // Fallback to regular API for non-OSCN counties
+      try {
+        const response = await fetch('/api/scrape', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
 
-      setResults(data.results || [])
-      setProgress('')
-    } catch (err: any) {
-      setError(err.message || 'Failed to scrape data')
-      setResults([])
-    } finally {
-      setIsLoading(false)
-      setProgress('')
+        const data = await response.json()
+        if (!response.ok) throw new Error(data.error || 'Failed to scrape data')
+
+        setResults(data.results || [])
+      } catch (err: any) {
+        setError(err.message || 'Failed to scrape data')
+        setResults([])
+      } finally {
+        setIsLoading(false)
+        setProgress('')
+      }
     }
   }
 
@@ -202,9 +270,16 @@ export default function EvictionsPage() {
 
       {/* Progress */}
       {isLoading && progress && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6 flex items-center">
-          <Loader2 className="w-5 h-5 animate-spin mr-2" />
-          {progress}
+        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6">
+          <div className="flex items-center">
+            <Loader2 className="w-5 h-5 animate-spin mr-2 flex-shrink-0" />
+            <span>{progress}</span>
+          </div>
+          {results.length > 0 && (
+            <p className="text-xs text-blue-500 mt-1 ml-7">
+              Showing {results.length} results so far — details updating in real-time
+            </p>
+          )}
         </div>
       )}
 
@@ -237,7 +312,7 @@ export default function EvictionsPage() {
           )}
         </div>
 
-        {isLoading ? (
+        {isLoading && results.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="w-8 h-8 animate-spin text-red-600" />
             <span className="ml-2 text-gray-600">Scraping court records...</span>
