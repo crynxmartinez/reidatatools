@@ -7,34 +7,58 @@ const SCRAPER_WORKER_URL = process.env.SCRAPER_WORKER_URL || 'https://rei-scrape
 
 // Call Render worker for Texas court scraping
 async function scrapeWithRenderWorker(county: string, type: string, fromDate: string, toDate: string) {
-  const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/texas-courts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ county, type, fromDate, toDate })
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || `Scraper worker returned ${response.status}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/texas-courts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ county, type, fromDate, toDate }),
+      signal: controller.signal
+    })
+    
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || `Scraper worker returned ${response.status}`)
+    }
+    
+    return await response.json()
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Scraper worker timed out after 30 seconds. The worker may be starting up — try again in a minute.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-  
-  return await response.json()
 }
 
 // Call Render worker for Arizona court/recorder scraping
 async function scrapeArizona(county: string, type: string, fromDate: string, toDate: string) {
-  const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/arizona-courts`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ county, type, fromDate, toDate })
-  })
-  
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || `Arizona scraper returned ${response.status}`)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(`${SCRAPER_WORKER_URL}/scrape/arizona-courts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ county, type, fromDate, toDate }),
+      signal: controller.signal
+    })
+    
+    if (!response.ok) {
+      const error = await response.json()
+      throw new Error(error.error || `Arizona scraper returned ${response.status}`)
+    }
+    
+    return await response.json()
+  } catch (err: any) {
+    if (err.name === 'AbortError') {
+      throw new Error('Arizona scraper timed out after 30 seconds. The worker may not have this endpoint yet.')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-  
-  return await response.json()
 }
 
 // Convert OSCN cases to eviction records format
