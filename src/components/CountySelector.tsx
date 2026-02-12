@@ -10,10 +10,6 @@ interface CountySelectorProps {
 }
 
 export default function CountySelector({ counties, selectedCounty, onCountyChange }: CountySelectorProps) {
-  if (counties.length <= 1) {
-    return null
-  }
-
   return (
     <div>
       <label htmlFor="county" className="block text-sm font-medium text-gray-700 mb-2">
