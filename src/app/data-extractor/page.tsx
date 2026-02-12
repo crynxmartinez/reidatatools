@@ -40,7 +40,7 @@ export default function DataExtractorPage() {
               selectedState={selectedState}
               onStateChange={handleStateChange}
             />
-            {counties.length > 1 && (
+            {selectedState && (
               <CountySelector
                 counties={counties}
                 selectedCounty={selectedCounty}
