@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const SCRAPE_DO_API_KEY = process.env.SCRAPE_DO_API_KEY || '565faafc96da4e46a1377f6d10b673d04e466e10d78'
+const SCRAPE_DO_API_KEY = process.env.SCRAPE_DO_API_KEY || ''
 
 interface SkipTraceResult {
   name: string

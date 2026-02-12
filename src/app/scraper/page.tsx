@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { Search, Home as HomeIcon, Gavel, FileText, ArrowRight } from 'lucide-react'
+import { SCRAPER_COUNTIES } from '@/config/scrapers'
 
 export default function ScraperPage() {
   return (
@@ -120,10 +121,10 @@ export default function ScraperPage() {
       <div className="mt-6 bg-white rounded-lg shadow-md p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Available Counties</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {['Dallas', 'Harris', 'Travis', 'Tarrant', 'Bexar'].map(county => (
-            <div key={county} className="flex items-center p-3 bg-gray-50 rounded-lg">
+          {SCRAPER_COUNTIES.map(county => (
+            <div key={county.name} className="flex items-center p-3 bg-gray-50 rounded-lg">
               <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
-              <span className="text-sm font-medium text-gray-700">{county} County</span>
+              <span className="text-sm font-medium text-gray-700">{county.name} County, {county.state}</span>
             </div>
           ))}
         </div>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { AlertTriangle, FileText, ArrowRight } from 'lucide-react'
+import { SOCRATA_CITIES } from '@/config/socrata'
 
 export default function PropertyLeadsPage() {
   return (
@@ -33,7 +34,7 @@ export default function PropertyLeadsPage() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500">
-                Available cities: Dallas, Houston, Austin, San Antonio, Fort Worth
+                Available cities: {SOCRATA_CITIES.filter(c => c.codeViolations).map(c => c.name).join(', ') || 'None configured'}
               </p>
             </div>
           </div>
@@ -58,7 +59,7 @@ export default function PropertyLeadsPage() {
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500">
-                Available cities: Dallas, Houston, Austin, San Antonio, Fort Worth
+                Available cities: {SOCRATA_CITIES.filter(c => c.buildingPermits).map(c => c.name).join(', ') || 'None configured'}
               </p>
             </div>
           </div>
