@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Search, Download, Flame, Loader2 } from 'lucide-react'
+import { Search, Download, Flame, Loader2, MapPin, ChevronDown, ChevronUp } from 'lucide-react'
 import { getCKANCitiesGroupedByState } from '@/config/ckan'
 import { fetchFireCalls, FireCall } from '@/services/ckan'
 import Papa from 'papaparse'
@@ -25,6 +25,38 @@ export default function FireCallsPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [hasSearched, setHasSearched] = useState(false)
+  const [expandedRow, setExpandedRow] = useState<string | null>(null)
+  const [parcelResults, setParcelResults] = useState<Record<string, any[]>>({})
+  const [parcelLoading, setParcelLoading] = useState<string | null>(null)
+
+  const searchParcels = async (callId: string, address: string) => {
+    if (expandedRow === callId && parcelResults[callId]) {
+      setExpandedRow(null)
+      return
+    }
+
+    setExpandedRow(callId)
+    if (parcelResults[callId]) return
+
+    setParcelLoading(callId)
+    try {
+      const response = await fetch('/api/parcel-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          streetAddress: address,
+          stateCode: 'AZ',
+          countyIndex: 0
+        })
+      })
+      const data = await response.json()
+      setParcelResults(prev => ({ ...prev, [callId]: data.parcels || [] }))
+    } catch (err) {
+      setParcelResults(prev => ({ ...prev, [callId]: [] }))
+    } finally {
+      setParcelLoading(null)
+    }
+  }
 
   const handleSearch = async () => {
     if (!selectedCity) {
@@ -217,28 +249,94 @@ export default function FireCallsPage() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {results.map((call, index) => (
-                  <tr key={call.id || index} className="hover:bg-gray-50">
-                    <td className="px-4 py-4 text-sm text-gray-900 font-medium">{call.address}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{call.city}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{call.date}</td>
-                    <td className="px-4 py-4 text-sm text-gray-600">{call.type}</td>
-                    <td className="px-4 py-4">
-                      <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                        call.category?.toUpperCase().includes('FIRE')
-                          ? 'bg-red-100 text-red-800'
-                          : call.category?.toUpperCase().includes('MEDICAL')
-                          ? 'bg-blue-100 text-blue-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {call.category || '-'}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {results.map((call, index) => {
+                  const callKey = call.id || `fc-${index}`
+                  const isExpanded = expandedRow === callKey
+                  const parcels = parcelResults[callKey]
+                  const isLoadingParcels = parcelLoading === callKey
+                  return (
+                    <>
+                      <tr key={callKey} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 text-sm text-gray-900 font-medium">{call.address}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{call.city}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{call.date}</td>
+                        <td className="px-4 py-4 text-sm text-gray-600">{call.type}</td>
+                        <td className="px-4 py-4">
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            call.category?.toUpperCase().includes('FIRE')
+                              ? 'bg-red-100 text-red-800'
+                              : call.category?.toUpperCase().includes('MEDICAL')
+                              ? 'bg-blue-100 text-blue-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {call.category || '-'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <button
+                            onClick={() => searchParcels(callKey, call.address)}
+                            disabled={isLoadingParcels}
+                            className="flex items-center px-3 py-1.5 text-xs font-medium text-primary-700 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors disabled:opacity-50"
+                          >
+                            {isLoadingParcels ? (
+                              <Loader2 className="w-3 h-3 animate-spin mr-1" />
+                            ) : (
+                              <MapPin className="w-3 h-3 mr-1" />
+                            )}
+                            Parcels
+                            {isExpanded ? <ChevronUp className="w-3 h-3 ml-1" /> : <ChevronDown className="w-3 h-3 ml-1" />}
+                          </button>
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr key={`${callKey}-parcels`}>
+                          <td colSpan={6} className="px-4 py-3 bg-blue-50">
+                            {isLoadingParcels ? (
+                              <div className="flex items-center py-4">
+                                <Loader2 className="w-4 h-4 animate-spin text-primary-600 mr-2" />
+                                <span className="text-sm text-gray-600">Searching parcels on this block...</span>
+                              </div>
+                            ) : parcels && parcels.length > 0 ? (
+                              <div>
+                                <p className="text-xs font-semibold text-gray-700 mb-2">{parcels.length} parcels found on this block:</p>
+                                <div className="overflow-x-auto">
+                                  <table className="min-w-full text-xs">
+                                    <thead>
+                                      <tr className="bg-blue-100">
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700">Address</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700">Owner</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700">Mailing Address</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700">Parcel ID</th>
+                                        <th className="px-3 py-2 text-left font-medium text-gray-700">Value</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {parcels.map((p: any, pi: number) => (
+                                        <tr key={pi} className="border-t border-blue-200 hover:bg-blue-100">
+                                          <td className="px-3 py-2 text-gray-900 font-medium">{p.address}</td>
+                                          <td className="px-3 py-2 text-gray-700">{p.ownerName}</td>
+                                          <td className="px-3 py-2 text-gray-600">{[p.mailingAddress, p.mailingCity, p.mailingState, p.mailingZip].filter(Boolean).join(', ')}</td>
+                                          <td className="px-3 py-2 text-gray-600">{p.parcelId}</td>
+                                          <td className="px-3 py-2 text-gray-600">{p.assessedValue ? `$${Number(p.assessedValue).toLocaleString()}` : '-'}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-gray-500 py-2">No parcels found on this block. The address may be an intersection or non-residential area.</p>
+                            )}
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  )
+                })}
               </tbody>
             </table>
           </div>
