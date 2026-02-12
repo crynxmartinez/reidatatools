@@ -1,5 +1,6 @@
 export interface SocrataCity {
   name: string
+  state: string
   domain: string
   codeViolations?: {
     datasetId: string
@@ -24,6 +25,7 @@ export interface SocrataCity {
 export const SOCRATA_CITIES: SocrataCity[] = [
   {
     name: 'Austin',
+    state: 'Texas',
     domain: 'data.austintexas.gov',
     codeViolations: {
       datasetId: 'xwdj-i9he',
@@ -43,8 +45,32 @@ export const SOCRATA_CITIES: SocrataCity[] = [
       costField: 'total_valuation',
       contractorField: 'contractor_company_name'
     }
+  },
+  {
+    name: 'Mesa',
+    state: 'Arizona',
+    domain: 'data.mesaaz.gov',
+    codeViolations: {
+      datasetId: 'hgf6-yenu',
+      addressField: 'case_address',
+      dateField: 'opened_date',
+      typeField: 'voilation_ordinance',
+      statusField: 'status',
+      descriptionField: 'description'
+    }
   }
 ]
+
+export function getCitiesGroupedByState(filter?: 'codeViolations' | 'buildingPermits'): Record<string, SocrataCity[]> {
+  const filtered = filter 
+    ? SOCRATA_CITIES.filter(c => c[filter])
+    : SOCRATA_CITIES
+  return filtered.reduce((groups, city) => {
+    if (!groups[city.state]) groups[city.state] = []
+    groups[city.state].push(city)
+    return groups
+  }, {} as Record<string, SocrataCity[]>)
+}
 
 export function getCityByName(name: string): SocrataCity | undefined {
   return SOCRATA_CITIES.find(city => city.name === name)

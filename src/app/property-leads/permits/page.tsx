@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { Search, Download, FileText, Loader2 } from 'lucide-react'
-import { SOCRATA_CITIES } from '@/config/socrata'
+import { getCitiesGroupedByState } from '@/config/socrata'
 import { fetchBuildingPermits, BuildingPermit } from '@/services/socrata'
 import Papa from 'papaparse'
 
@@ -109,10 +109,14 @@ export default function BuildingPermitsPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none bg-white text-gray-900"
             >
               <option value="">Select a city</option>
-              {SOCRATA_CITIES.filter(c => c.buildingPermits).map(city => (
-                <option key={city.name} value={city.name}>
-                  {city.name}
-                </option>
+              {Object.entries(getCitiesGroupedByState('buildingPermits')).map(([state, cities]) => (
+                <optgroup key={state} label={state}>
+                  {cities.map(city => (
+                    <option key={city.name} value={city.name}>
+                      {city.name}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           </div>
