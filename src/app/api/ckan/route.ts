@@ -79,12 +79,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const csvText = await response.text()
+    let csvText = await response.text()
+    // Strip BOM character if present
+    if (csvText.charCodeAt(0) === 0xFEFF) {
+      csvText = csvText.slice(1)
+    }
+    // Normalize line endings
+    csvText = csvText.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
     console.log(`[CKAN] Received ${csvText.length} bytes`)
 
     if (type === 'csv') {
       const results = parseCSV(csvText)
       console.log(`[CKAN] Parsed ${results.length} rows`)
+      if (results.length > 0) {
+        console.log(`[CKAN] Headers: ${JSON.stringify(Object.keys(results[0]))}`)
+        console.log(`[CKAN] First row: ${JSON.stringify(results[0])}`)
+      }
 
       return NextResponse.json({
         success: true,

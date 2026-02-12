@@ -39,12 +39,10 @@ export const CKAN_CITIES: CKANDataset[] = [
     fireCalls: {
       datasetSlug: 'calls-for-service-fire',
       resourceId: '3f3bb1b6-dfe3-4b69-9a5d-cedef4264087',
-      addressField: 'ADDR',
-      dateField: 'CALL_RECEIVED',
+      addressField: 'INCIDENT_ADDRESS',
+      dateField: 'REPORTED',
       typeField: 'NATURE_CODE',
-      categoryField: 'CATEGORY',
-      latField: 'LAT',
-      lonField: 'LON'
+      categoryField: 'CATEGORY'
     },
     buildingPermits: {
       datasetSlug: 'phoenix-az-building-permit-data',
