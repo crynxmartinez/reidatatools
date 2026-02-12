@@ -90,6 +90,31 @@ function parseCSVLine(line: string): string[] {
   return result
 }
 
+// Determine which yearly resource IDs to fetch based on date range
+function getResourceIdsForDateRange(
+  config: { resourceId: string; yearlyResources?: Record<string, string> },
+  fromDate?: string,
+  toDate?: string
+): string[] {
+  if (!config.yearlyResources) {
+    return [config.resourceId]
+  }
+
+  const fromYear = fromDate ? new Date(fromDate).getFullYear() : new Date().getFullYear()
+  const toYear = toDate ? new Date(toDate).getFullYear() : new Date().getFullYear()
+
+  const resourceIds: string[] = []
+  for (let year = fromYear; year <= toYear; year++) {
+    const yearStr = year.toString()
+    if (config.yearlyResources[yearStr]) {
+      resourceIds.push(config.yearlyResources[yearStr])
+    }
+  }
+
+  // Fallback to default if no yearly match
+  return resourceIds.length > 0 ? resourceIds : [config.resourceId]
+}
+
 export async function fetchFireCalls(params: CKANQueryParams): Promise<FireCall[]> {
   const city = getCKANCityByName(params.cityName)
   if (!city || !city.fireCalls) {
@@ -99,28 +124,36 @@ export async function fetchFireCalls(params: CKANQueryParams): Promise<FireCall[
   const config = city.fireCalls
   const limit = params.limit || 500
 
-  // Fetch via our API proxy to avoid CORS
-  const response = await fetch('/api/ckan', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      domain: city.domain,
-      datasetSlug: config.datasetSlug,
-      resourceId: config.resourceId,
-      type: 'csv'
-    })
-  })
+  // Determine which yearly CSV(s) to fetch
+  const resourceIds = getResourceIdsForDateRange(config, params.fromDate, params.toDate)
 
-  if (!response.ok) {
-    const error = await response.json()
-    throw new Error(error.error || `Failed to fetch fire calls: ${response.status}`)
+  // Fetch all needed yearly CSVs and merge
+  let allRows: Record<string, string>[] = []
+  for (const resourceId of resourceIds) {
+    const response = await fetch('/api/ckan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        domain: city.domain,
+        datasetSlug: config.datasetSlug,
+        resourceId,
+        type: 'csv'
+      })
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      console.error(`Failed to fetch resource ${resourceId}: ${error.error}`)
+      continue
+    }
+
+    const data = await response.json()
+    const rows: Record<string, string>[] = data.results || []
+    allRows = allRows.concat(rows)
   }
 
-  const data = await response.json()
-  const rows: Record<string, string>[] = data.results || []
-
   // Filter by date range
-  let filtered = rows
+  let filtered = allRows
   if (params.fromDate) {
     const from = new Date(params.fromDate)
     filtered = filtered.filter(row => {

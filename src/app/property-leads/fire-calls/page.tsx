@@ -6,10 +6,20 @@ import { getCKANCitiesGroupedByState } from '@/config/ckan'
 import { fetchFireCalls, FireCall } from '@/services/ckan'
 import Papa from 'papaparse'
 
+function getDefaultFromDate() {
+  const date = new Date()
+  date.setDate(date.getDate() - 30)
+  return date.toISOString().split('T')[0]
+}
+
+function getDefaultToDate() {
+  return new Date().toISOString().split('T')[0]
+}
+
 export default function FireCallsPage() {
   const [selectedCity, setSelectedCity] = useState('')
-  const [fromDate, setFromDate] = useState('')
-  const [toDate, setToDate] = useState('')
+  const [fromDate, setFromDate] = useState(getDefaultFromDate())
+  const [toDate, setToDate] = useState(getDefaultToDate())
   const [category, setCategory] = useState('FIRE')
   const [results, setResults] = useState<FireCall[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -65,16 +75,6 @@ export default function FireCallsPage() {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
-  }
-
-  const getDefaultFromDate = () => {
-    const date = new Date()
-    date.setDate(date.getDate() - 30)
-    return date.toISOString().split('T')[0]
-  }
-
-  const getDefaultToDate = () => {
-    return new Date().toISOString().split('T')[0]
   }
 
   return (
@@ -136,7 +136,7 @@ export default function FireCallsPage() {
             </label>
             <input
               type="date"
-              value={fromDate || getDefaultFromDate()}
+              value={fromDate}
               onChange={(e) => setFromDate(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-gray-900"
             />
@@ -148,7 +148,7 @@ export default function FireCallsPage() {
             </label>
             <input
               type="date"
-              value={toDate || getDefaultToDate()}
+              value={toDate}
               onChange={(e) => setToDate(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 outline-none text-gray-900"
             />

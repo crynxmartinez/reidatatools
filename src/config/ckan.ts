@@ -5,6 +5,7 @@ export interface CKANDataset {
   fireCalls?: {
     datasetSlug: string
     resourceId: string
+    yearlyResources?: Record<string, string>
     addressField: string
     dateField: string
     typeField: string
@@ -38,7 +39,12 @@ export const CKAN_CITIES: CKANDataset[] = [
     domain: 'www.phoenixopendata.com',
     fireCalls: {
       datasetSlug: 'calls-for-service-fire',
-      resourceId: '3f3bb1b6-dfe3-4b69-9a5d-cedef4264087',
+      resourceId: 'd84ee741-f8f4-433d-898b-69081c8401f5',
+      yearlyResources: {
+        '2024': '2169fba5-a64a-42da-893d-931b97ea10ef',
+        '2025': '3f3bb1b6-dfe3-4b69-9a5d-cedef4264087',
+        '2026': 'd84ee741-f8f4-433d-898b-69081c8401f5'
+      },
       addressField: 'INCIDENT_ADDRESS',
       dateField: 'REPORTED',
       typeField: 'NATURE_CODE',
