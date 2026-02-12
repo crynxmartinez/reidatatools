@@ -179,6 +179,29 @@ export const STATES: StateConfig[] = [
         outFields: ['PROP_ID', 'OWNER_NAME', 'MAIL_ADDR', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'SITUS_ADDR', 'SITUS_CITY', 'SITUS_ZIP']
       }
     ]
+  },
+  {
+    code: 'AZ',
+    name: 'Arizona',
+    type: 'county',
+    url: '',
+    counties: [
+      // Phoenix Metro
+      {
+        name: 'Maricopa County (MCAO)',
+        url: 'https://gis.mcassessor.maricopa.gov/arcgis/rest/services/Parcels/MapServer/0',
+        parcelField: 'APN',
+        ownerField: 'OWNER_NAME',
+        mailingAddressField: 'MAIL_ADDR1',
+        mailingCityField: 'MAIL_CITY',
+        mailingStateField: 'MAIL_STATE',
+        mailingZipField: 'MAIL_ZIP',
+        situsField: 'PHYSICAL_ADDRESS',
+        cityField: 'PHYSICAL_CITY',
+        zipField: 'PHYSICAL_ZIP',
+        outFields: ['APN', 'APN_DASH', 'OWNER_NAME', 'MAIL_ADDR1', 'MAIL_ADDR2', 'MAIL_CITY', 'MAIL_STATE', 'MAIL_ZIP', 'PHYSICAL_ADDRESS', 'PHYSICAL_CITY', 'PHYSICAL_ZIP', 'SALE_DATE', 'SALE_PRICE', 'FCV_CUR', 'LPV_CUR', 'SUBNAME', 'LAND_SIZE', 'CONST_YEAR', 'LIVING_SPACE', 'JURISDICTION']
+      }
+    ]
   }
 ]
 
