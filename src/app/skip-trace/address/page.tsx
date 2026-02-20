@@ -80,10 +80,6 @@ export default function AddressLookupPage() {
       }
 
       setResults(data.results || [])
-      
-      if (data.errors && data.errors.length > 0) {
-        setError(`Some sources had errors: ${data.errors.join(', ')}`)
-      }
     } catch (err: any) {
       setError(err.message || 'Failed to search')
       setResults([])
