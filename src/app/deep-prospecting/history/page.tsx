@@ -30,8 +30,35 @@ export default function DeepProspectHistoryPage() {
 
   const safeResult = (result: any): string => {
     if (!result) return ''
-    if (typeof result === 'string') return result
+
+    // Already a clean string
+    if (typeof result === 'string') {
+      // Check if it's a JSON string containing a messages array
+      try {
+        const parsed = JSON.parse(result)
+        if (Array.isArray(parsed)) return extractManusText(parsed)
+      } catch { /* not JSON, return as-is */ }
+      return result
+    }
+
+    // Raw array of Manus messages
+    if (Array.isArray(result)) return extractManusText(result)
+
     return JSON.stringify(result, null, 2)
+  }
+
+  const extractManusText = (messages: any[]): string => {
+    const parts: string[] = []
+    for (const msg of messages) {
+      if (msg.role !== 'assistant') continue
+      if (!Array.isArray(msg.content)) continue
+      for (const block of msg.content) {
+        if (block.type === 'output_text' && typeof block.text === 'string' && block.text.trim()) {
+          parts.push(block.text.trim())
+        }
+      }
+    }
+    return parts.join('\n\n---\n\n')
   }
 
   const handleCopy = (id: string, text: any) => {
