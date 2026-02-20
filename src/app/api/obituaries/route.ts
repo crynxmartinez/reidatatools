@@ -50,128 +50,148 @@ function parseLegacyObituaries(html: string, sourceId: string): Obituary[] {
   const source = OBITUARY_SOURCES.find(s => s.id === sourceId)
   if (!source) return []
 
-  const $ = cheerio.load(html)
   const obituaries: Obituary[] = []
 
-  // Legacy.com renders obit cards — each card has name, date, city, funeral home
-  // Selectors based on Legacy.com's React-rendered HTML structure
+  // Strategy 1: Extract from schema.org ItemList JSON (most reliable — always present)
+  // Format: {"@type":"ListItem","url":"https://www.legacy.com/...","name":"John Smith","image":"..."}
+  const itemListMatch = html.match(/"mainEntity"\s*:\s*\{[^}]*"itemListElement"\s*:\s*(\[[\s\S]*?\])\s*\}/)
+  const schemaItems: Array<{ url: string; name: string; image?: string }> = []
 
-  // Strategy 1: data-component or article cards
-  const cardSelectors = [
-    '[data-component="ObituaryCard"]',
-    'article',
-    '.obituary-listing',
-    '.obit-listing',
-    '[class*="ObituaryCard"]',
-    '[class*="obituary-card"]',
-    '[class*="obit-card"]',
-  ]
-
-  let foundCards = false
-
-  for (const selector of cardSelectors) {
-    const $cards = $(selector)
-    if ($cards.length > 2) {
-      $cards.each((_, card) => {
-        const $card = $(card)
-        const $link = $card.find('a[href*="/obituaries/"]').first()
-        const href = $link.attr('href') || ''
-        const name = $card.find('h2, h3, [class*="name"], [class*="Name"]').first().text().trim()
-          || $link.text().trim()
-
-        if (!name || name.length < 3) return
-
-        const detailUrl = href.startsWith('http') ? href : `https://www.legacy.com${href}`
-        const cardText = $card.text().trim()
-
-        // Extract date
-        const dateMatch = cardText.match(/(\w+ \d{1,2},?\s*\d{4})/)?.[1]
-          || cardText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1]
-          || ''
-
-        // Extract city
-        let city = ''
-        for (const c of source.cities) {
-          if (cardText.includes(c)) { city = c; break }
+  if (itemListMatch) {
+    try {
+      const items = JSON.parse(itemListMatch[1])
+      for (const item of items) {
+        if (item.url && item.name) {
+          schemaItems.push({ url: item.url, name: item.name, image: item.image })
         }
-
-        // Extract funeral home
-        const funeralMatch = cardText.match(/([A-Z][^.]*(?:Funeral|Memorial|Mortuary|Chapel|Cremation)[^.]*)/)?.[1]?.trim() || ''
-
-        // Extract survived by
-        const survivedMatch = cardText.match(/survived by[^.]*\./i)?.[0]
-          || cardText.match(/is survived by[^.]*\./i)?.[0]
-          || ''
-
-        // Image
-        const imgSrc = $card.find('img').attr('src') || ''
-
-        obituaries.push({
-          name,
-          date: dateMatch,
-          city,
-          state: source.stateCode,
-          funeralHome: funeralMatch.substring(0, 100),
-          survivedBy: survivedMatch.substring(0, 200),
-          snippet: cardText.substring(0, 400).replace(/\s+/g, ' ').trim(),
-          detailUrl,
-          imageUrl: imgSrc || undefined,
-          source: source.name,
-          county: source.county
-        })
-      })
-
-      if (obituaries.length > 0) {
-        foundCards = true
-        break
       }
+    } catch { /* ignore parse errors */ }
+  }
+
+  // Strategy 2: Extract from Hypernova JSON blob — has obitSnippet, location, fromToYears, mainPhoto
+  // Each obit record looks like: {"name":{"fullName":"..."},"location":{"city":{"fullName":"..."}},"obitSnippet":"...","fromToYears":"...","mainPhoto":{"url":"..."}}
+  const obitDataMap = new Map<string, { snippet: string; city: string; years: string; photo: string; funeralHome: string }>()
+
+  // Extract all obitSnippet blocks from the JSON blob
+  const snippetRegex = /"fullName"\s*:\s*"([^"]+)"[^}]*?"obitSnippet"\s*:\s*"([^"]*?)"/g
+  let match
+  while ((match = snippetRegex.exec(html)) !== null) {
+    const fullName = match[1]
+    const snippet = match[2].replace(/\\n/g, ' ').replace(/\\"/g, '"')
+    obitDataMap.set(fullName, { snippet, city: '', years: '', photo: '', funeralHome: '' })
+  }
+
+  // Extract city info
+  const cityRegex = /"fullName"\s*:\s*"([^"]+)"[\s\S]{1,300}?"city"\s*:\s*\{"fullName"\s*:\s*"?([^",}]*)"?/g
+  while ((match = cityRegex.exec(html)) !== null) {
+    const fullName = match[1]
+    const city = match[2]?.trim() || ''
+    if (obitDataMap.has(fullName) && city && city !== 'null') {
+      obitDataMap.get(fullName)!.city = city
     }
   }
 
-  // Strategy 2: Find all links to /obituaries/ detail pages
-  if (!foundCards) {
-    $('a[href*="/obituaries/"]').each((_, el) => {
-      const $el = $(el)
-      const href = $el.attr('href') || ''
-      const name = $el.text().trim()
+  // Extract fromToYears
+  const yearsRegex = /"fullName"\s*:\s*"([^"]+)"[\s\S]{1,200}?"fromToYears"\s*:\s*"([^"]+)"/g
+  while ((match = yearsRegex.exec(html)) !== null) {
+    const fullName = match[1]
+    const years = match[2]
+    if (obitDataMap.has(fullName)) {
+      obitDataMap.get(fullName)!.years = years
+    }
+  }
 
-      // Skip nav/category links
-      if (!name || name.length < 3) return
-      if (href.includes('/local/') || href.includes('/browse') || href.includes('/search')) return
-      if (name.toLowerCase().includes('obituar') || name.toLowerCase().includes('browse')) return
+  // Extract mainPhoto
+  const photoRegex = /"fullName"\s*:\s*"([^"]+)"[\s\S]{1,500}?"mainPhoto"\s*:\s*\{"url"\s*:\s*"([^"]+)"/g
+  while ((match = photoRegex.exec(html)) !== null) {
+    const fullName = match[1]
+    const photo = match[2]
+    if (obitDataMap.has(fullName)) {
+      obitDataMap.get(fullName)!.photo = photo
+    }
+  }
 
-      const detailUrl = href.startsWith('http') ? href : `https://www.legacy.com${href}`
-      const $parent = $el.closest('li, div, article, section')
-      const parentText = $parent.text().trim()
+  // Build obituaries from schema items + enrich with Hypernova data
+  if (schemaItems.length > 0) {
+    for (const item of schemaItems) {
+      const extra = obitDataMap.get(item.name) || { snippet: '', city: '', years: '', photo: '', funeralHome: '' }
 
-      const dateMatch = parentText.match(/(\w+ \d{1,2},?\s*\d{4})/)?.[1] || ''
+      // Extract date from years range (e.g. "1945 - 2026") or from snippet
+      let date = ''
+      if (extra.years) {
+        const yearMatch = extra.years.match(/(\d{4})\s*$/)
+        if (yearMatch) date = yearMatch[1]
+      }
+      const dateFromSnippet = extra.snippet.match(/(\d{2}\/\d{2}\/\d{4})/)?.[1] || ''
+      if (!date && dateFromSnippet) date = dateFromSnippet
 
-      let city = ''
-      for (const c of source.cities) {
-        if (parentText.includes(c)) { city = c; break }
+      // Extract city from snippet if not in structured data
+      let city = extra.city || ''
+      if (!city) {
+        for (const c of source.cities) {
+          if (extra.snippet.includes(c)) { city = c; break }
+        }
       }
 
+      // Extract funeral home from snippet
+      const funeralMatch = extra.snippet.match(/([A-Z][^.]*(?:Funeral|Memorial|Mortuary|Chapel|Cremation)[^.]*)/)?.[1]?.trim() || ''
+
+      // Extract survived by from snippet
+      const survivedMatch = extra.snippet.match(/(?:survived by|is survived by)[^.]*\./i)?.[0] || ''
+
       obituaries.push({
-        name,
-        date: dateMatch,
+        name: item.name,
+        date,
         city,
         state: source.stateCode,
-        funeralHome: '',
-        survivedBy: '',
-        snippet: parentText.substring(0, 300).replace(/\s+/g, ' ').trim(),
-        detailUrl,
+        funeralHome: funeralMatch.substring(0, 100),
+        survivedBy: survivedMatch.substring(0, 300),
+        snippet: extra.snippet.substring(0, 400),
+        detailUrl: item.url,
+        imageUrl: item.image || extra.photo || undefined,
         source: source.name,
         county: source.county
       })
+    }
+    return obituaries
+  }
+
+  // Fallback Strategy 3: regex all name+url pairs from the JSON blob
+  const urlNameRegex = /"url"\s*:\s*"(https:\/\/www\.legacy\.com\/us\/obituaries\/[^"]+)"\s*,\s*"name"\s*:\s*"([^"]+)"/g
+  while ((match = urlNameRegex.exec(html)) !== null) {
+    const url = match[1]
+    const name = match[2]
+    if (!name || name.length < 3) continue
+    if (name.toLowerCase().includes('obituar')) continue
+
+    const extra = obitDataMap.get(name) || { snippet: '', city: '', years: '', photo: '', funeralHome: '' }
+    let city = extra.city || ''
+    if (!city) {
+      for (const c of source.cities) {
+        if (extra.snippet.includes(c)) { city = c; break }
+      }
+    }
+
+    obituaries.push({
+      name,
+      date: extra.years?.match(/(\d{4})\s*$/)?.[1] || '',
+      city,
+      state: source.stateCode,
+      funeralHome: '',
+      survivedBy: '',
+      snippet: extra.snippet.substring(0, 400),
+      detailUrl: url,
+      imageUrl: extra.photo || undefined,
+      source: source.name,
+      county: source.county
     })
   }
 
-  // Deduplicate by name + date
+  // Deduplicate by URL
   const seen = new Set<string>()
   return obituaries.filter(o => {
-    const key = `${o.name}|${o.date}`
-    if (seen.has(key)) return false
-    seen.add(key)
+    if (seen.has(o.detailUrl)) return false
+    seen.add(o.detailUrl)
     return true
   })
 }
