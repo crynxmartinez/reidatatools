@@ -9,7 +9,7 @@ export function buildManusPrompt(input: {
 
 ## Property Information
 - **Owner Name:** ${ownerName}
-- **Property Address:** ${address}
+- **Location:** ${address} (may be a zip code, city, county, or full address)
 ${extraContext ? `- **Additional Context:**\n${extraContext}` : ''}
 
 ## Research Instructions
