@@ -1,11 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, FileText, Flame, Home as HomeIcon, Gavel, ArrowRight, Target, Newspaper } from 'lucide-react'
+import { AlertTriangle, FileText, Flame, Home as HomeIcon, Gavel, ArrowRight, Target, Newspaper, BookOpen } from 'lucide-react'
 import { getCKANCitiesGroupedByState } from '@/config/ckan'
 import { getCitiesGroupedByState } from '@/config/socrata'
 import { SCRAPER_COUNTIES } from '@/config/scrapers'
 import { PUBLIC_NOTICE_SITES } from '@/config/publicNotices'
+import { OBITUARY_SOURCES } from '@/config/obituaries'
 
 export default function LeadSourcesPage() {
   const evictionCounties = SCRAPER_COUNTIES.filter(c => c.evictions).map(c => `${c.name}, ${c.state}`)
@@ -204,6 +205,34 @@ export default function LeadSourcesPage() {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500">
                 {PUBLIC_NOTICE_SITES.map(s => s.state).join(', ')} — all counties statewide
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Obituaries Section */}
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Obituaries</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Link href="/lead-sources/obituaries" className="block md:col-span-3">
+          <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 border-rose-500 h-full">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center">
+                <div className="p-3 bg-rose-100 rounded-lg">
+                  <BookOpen className="w-6 h-6 text-rose-600" />
+                </div>
+                <div className="ml-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Obituaries</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Pre-probate leads — find heirs before probate filings go public
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-gray-400" />
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                {OBITUARY_SOURCES.map(s => `${s.county} County, ${s.stateCode}`).join(' · ')} — via {OBITUARY_SOURCES.map(s => s.name).join(', ')}
               </p>
             </div>
           </div>

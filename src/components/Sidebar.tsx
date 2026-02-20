@@ -20,6 +20,7 @@ const navigation = [
       { name: 'Foreclosures', href: '/lead-sources/foreclosures' },
       { name: 'Probate', href: '/lead-sources/probate' },
       { name: 'Public Notices', href: '/lead-sources/public-notices' },
+      { name: 'Obituaries', href: '/lead-sources/obituaries' },
     ]
   },
   { 
