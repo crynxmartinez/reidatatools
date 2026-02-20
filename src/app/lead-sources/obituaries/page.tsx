@@ -24,6 +24,7 @@ export default function ObituariesPage() {
   const [keyword, setKeyword] = useState('')
   const [city, setCity] = useState('')
   const [days, setDays] = useState('30')
+  const [searchMode, setSearchMode] = useState<'browse' | 'name'>('browse')
   const [results, setResults] = useState<Obituary[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -127,7 +128,32 @@ export default function ObituariesPage() {
 
       {/* Search Form */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+
+        {/* Mode Toggle */}
+        <div className="flex gap-2 mb-5">
+          <button
+            onClick={() => { setSearchMode('browse'); setKeyword('') }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              searchMode === 'browse'
+                ? 'bg-rose-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Browse by Date
+          </button>
+          <button
+            onClick={() => { setSearchMode('name'); setDays('') }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              searchMode === 'name'
+                ? 'bg-rose-600 text-white'
+                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            Search by Name
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
           {/* Source */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Source</label>
@@ -142,47 +168,56 @@ export default function ObituariesPage() {
             </select>
           </div>
 
-          {/* City */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">City (optional)</label>
-            <select
-              value={city}
-              onChange={e => setCity(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none bg-white text-gray-900"
-            >
-              <option value="">All Cities</option>
-              {selectedSource?.cities.map(c => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Date Range */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
-            <select
-              value={days}
-              onChange={e => setDays(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none bg-white text-gray-900"
-            >
-              {DATE_RANGE_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* Keyword */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Keyword (optional)</label>
-            <input
-              type="text"
-              value={keyword}
-              onChange={e => setKeyword(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSearch()}
-              placeholder="name, city, funeral home..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none text-gray-900"
-            />
-          </div>
+          {searchMode === 'browse' ? (
+            <>
+              {/* Date Range */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Date Range</label>
+                <select
+                  value={days}
+                  onChange={e => setDays(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none bg-white text-gray-900"
+                >
+                  {DATE_RANGE_OPTIONS.map(o => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+              {/* City */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">City (optional)</label>
+                <select
+                  value={city}
+                  onChange={e => setCity(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none bg-white text-gray-900"
+                >
+                  <option value="">All Cities</option>
+                  {selectedSource?.cities.map(c => (
+                    <option key={c} value={c}>{c}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Name Search */}
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Name <span className="text-gray-400 font-normal">(last name, or first + last)</span>
+                </label>
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={e => setKeyword(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                  placeholder="e.g. Smith  or  John Smith"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 outline-none text-gray-900"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-400 mt-1">Single word = last name search &nbsp;·&nbsp; Two words = first + last name</p>
+              </div>
+            </>
+          )}
         </div>
 
         <button
