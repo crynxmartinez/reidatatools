@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { buildManusPrompt } from '@/config/deepProspect'
 
 const MANUS_API_KEY = process.env.MANUS_API_KEY || ''
-const MANUS_BASE_URL = 'https://open.manus.im/v1'
+const MANUS_BASE_URL = 'https://api.manus.ai/v1'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,12 +28,12 @@ export async function POST(request: NextRequest) {
     const response = await fetch(`${MANUS_BASE_URL}/tasks`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${MANUS_API_KEY}`,
+        'API_KEY': MANUS_API_KEY,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         prompt,
-        title: `Deep Prospect: ${ownerName} — ${address}`
+        agentProfile: 'manus-1.6'
       })
     })
 
@@ -51,7 +51,8 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      taskId: data.id || data.task_id || data.taskId,
+      taskId: data.task_id,
+      taskUrl: data.task_url,
       status: data.status || 'pending'
     })
 
@@ -78,7 +79,7 @@ export async function GET(request: NextRequest) {
 
     const response = await fetch(`${MANUS_BASE_URL}/tasks/${taskId}`, {
       headers: {
-        'Authorization': `Bearer ${MANUS_API_KEY}`
+        'API_KEY': MANUS_API_KEY
       }
     })
 
