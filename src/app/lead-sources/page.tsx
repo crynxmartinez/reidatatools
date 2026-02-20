@@ -1,10 +1,11 @@
 'use client'
 
 import Link from 'next/link'
-import { AlertTriangle, FileText, Flame, Home as HomeIcon, Gavel, ArrowRight, Target } from 'lucide-react'
+import { AlertTriangle, FileText, Flame, Home as HomeIcon, Gavel, ArrowRight, Target, Newspaper } from 'lucide-react'
 import { getCKANCitiesGroupedByState } from '@/config/ckan'
 import { getCitiesGroupedByState } from '@/config/socrata'
 import { SCRAPER_COUNTIES } from '@/config/scrapers'
+import { PUBLIC_NOTICE_SITES } from '@/config/publicNotices'
 
 export default function LeadSourcesPage() {
   const evictionCounties = SCRAPER_COUNTIES.filter(c => c.evictions).map(c => `${c.name}, ${c.state}`)
@@ -175,6 +176,34 @@ export default function LeadSourcesPage() {
             <div className="mt-4 pt-4 border-t border-gray-100">
               <p className="text-xs text-gray-500">
                 {probateCounties.length > 0 ? probateCounties.join(', ') : 'No counties configured'}
+              </p>
+            </div>
+          </div>
+        </Link>
+      </div>
+
+      {/* Public Notices Section */}
+      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Public Notices</h2>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <Link href="/lead-sources/public-notices" className="block md:col-span-3">
+          <div className="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow border-l-4 border-indigo-500 h-full">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center">
+                <div className="p-3 bg-indigo-100 rounded-lg">
+                  <Newspaper className="w-6 h-6 text-indigo-600" />
+                </div>
+                <div className="ml-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Public Notices</h2>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Foreclosures, probate, tax sales from state press associations
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-5 h-5 text-gray-400" />
+            </div>
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <p className="text-xs text-gray-500">
+                {PUBLIC_NOTICE_SITES.map(s => s.state).join(', ')} — all counties statewide
               </p>
             </div>
           </div>

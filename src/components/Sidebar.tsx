@@ -19,6 +19,7 @@ const navigation = [
       { name: 'Evictions', href: '/lead-sources/evictions' },
       { name: 'Foreclosures', href: '/lead-sources/foreclosures' },
       { name: 'Probate', href: '/lead-sources/probate' },
+      { name: 'Public Notices', href: '/lead-sources/public-notices' },
     ]
   },
   { 
