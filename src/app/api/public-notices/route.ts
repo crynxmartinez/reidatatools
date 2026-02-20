@@ -16,23 +16,40 @@ interface PublicNotice {
   state: string
 }
 
-async function fetchWithScrapeDo(targetUrl: string): Promise<string> {
+async function fetchWithScrapeDo(targetUrl: string, options?: {
+  method?: 'GET' | 'POST'
+  body?: string
+  extraHeaders?: Record<string, string>
+  returnCookies?: boolean
+}): Promise<{ html: string; cookies?: string }> {
   if (!SCRAPE_DO_API_KEY) {
-    throw new Error('SCRAPE_DO_API_KEY is not configured. Please set it in your environment variables.')
+    throw new Error('SCRAPE_DO_API_KEY is not configured.')
   }
 
+  const method = options?.method || 'GET'
   const encodedUrl = encodeURIComponent(targetUrl)
-  const scrapeDoUrl = `https://api.scrape.do?token=${SCRAPE_DO_API_KEY}&url=${encodedUrl}&super=true&geoCode=us`
+  const scrapeDoUrl = `https://api.scrape.do?token=${SCRAPE_DO_API_KEY}&url=${encodedUrl}&geoCode=us`
 
-  console.log(`[PublicNotices] Fetching: ${targetUrl}`)
+  console.log(`[PublicNotices] ${method}: ${targetUrl}`)
 
   const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 30000)
+  const timeout = setTimeout(() => controller.abort(), 45000)
 
   try {
+    const headers: Record<string, string> = {
+      'Accept': 'text/html,application/xhtml+xml',
+      'Accept-Language': 'en-US,en;q=0.9',
+      ...(options?.extraHeaders || {})
+    }
+
+    if (method === 'POST') {
+      headers['Content-Type'] = 'application/x-www-form-urlencoded'
+    }
+
     const response = await fetch(scrapeDoUrl, {
-      method: 'GET',
-      headers: { 'Accept': 'text/html' },
+      method,
+      headers,
+      body: options?.body,
       signal: controller.signal
     })
 
@@ -42,7 +59,10 @@ async function fetchWithScrapeDo(targetUrl: string): Promise<string> {
       throw new Error(`Scrape.do returned ${response.status}: ${response.statusText}`)
     }
 
-    return await response.text()
+    const html = await response.text()
+    const cookies = options?.returnCookies ? response.headers.get('set-cookie') || '' : undefined
+
+    return { html, cookies }
   } finally {
     clearTimeout(timeout)
   }
@@ -286,8 +306,8 @@ export async function POST(request: NextRequest) {
     // Action: fetch detail page for a specific notice
     if (action === 'detail' && detailUrl) {
       console.log(`[PublicNotices] Fetching detail: ${detailUrl}`)
-      const html = await fetchWithScrapeDo(detailUrl)
-      const detail = parseNoticeDetail(html, siteId)
+      const { html: detailHtml } = await fetchWithScrapeDo(detailUrl)
+      const detail = parseNoticeDetail(detailHtml, siteId)
       return NextResponse.json({ success: true, ...detail })
     }
 
@@ -296,84 +316,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Please provide a keyword or county to search' }, { status: 400 })
     }
 
-    // Build the search URL
-    // These ASP.NET sites accept keyword search via URL params
     const baseUrl = `https://${site.domain}`
-    
-    // First, fetch the search page to get any session/viewstate tokens
-    // Then we'll try a simple keyword-based URL approach
-    let searchUrl = `${baseUrl}/Search.aspx`
-    
-    // Try the simple search approach - append keyword to URL
-    // Many of these sites support: /Search.aspx?keyword=foreclosure&county=Madison
-    const params = new URLSearchParams()
-    if (keyword) params.set('keyword', keyword)
-    
-    // For the initial approach, we'll fetch the search page and look for results
-    // If the site requires POST, we'll need to handle ViewState
+    const searchUrl = `${baseUrl}/Search.aspx`
+
     console.log(`[PublicNotices] Searching ${site.name}: keyword="${keyword}", county="${county}"`)
-    
-    // Fetch the search page
-    const html = await fetchWithScrapeDo(searchUrl)
-    
-    // Check if we got a page with a search form (need to submit it)
-    // or if results are already present
-    let notices = parseNoticeResults(html, siteId)
-    
-    // If no results found from the initial page, try to submit the search form
-    // by constructing a POST request with the form data
-    if (notices.length === 0) {
-      const $ = cheerio.load(html)
-      
-      // Extract ASP.NET form fields
-      const viewState = $('input[name="__VIEWSTATE"]').val() as string || ''
-      const viewStateGenerator = $('input[name="__VIEWSTATEGENERATOR"]').val() as string || ''
-      const eventValidation = $('input[name="__EVENTVALIDATION"]').val() as string || ''
-      
-      if (viewState) {
-        console.log(`[PublicNotices] Found ASP.NET form, submitting search...`)
-        
-        // Build form data for POST
-        const formData = new URLSearchParams()
-        formData.set('__VIEWSTATE', viewState)
-        if (viewStateGenerator) formData.set('__VIEWSTATEGENERATOR', viewStateGenerator)
-        if (eventValidation) formData.set('__EVENTVALIDATION', eventValidation)
-        
-        // Set search fields - usalegalnotice platform field names (confirmed from HTML inspection)
-        if (keyword) {
-          formData.set('ctl00$ContentPlaceHolder1$as1$txtSearch', keyword)
-        }
-        // hdnField: 0=All Words, 1=Any Words, 2=Exact Phrase
-        formData.set('ctl00$ContentPlaceHolder1$as1$hdnField', '0')
-        
-        // Submit the search - button is btnGo not btnSearch
-        formData.set('ctl00$ContentPlaceHolder1$as1$btnGo', '')
-        
-        // Use Scrape.do with POST
-        const postUrl = `https://api.scrape.do?token=${SCRAPE_DO_API_KEY}&url=${encodeURIComponent(searchUrl)}&super=true&geoCode=us`
-        
-        const controller = new AbortController()
-        const timeout = setTimeout(() => controller.abort(), 30000)
-        
-        try {
-          const postResponse = await fetch(postUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: formData.toString(),
-            signal: controller.signal
-          })
-          
-          if (postResponse.ok) {
-            const postHtml = await postResponse.text()
-            notices = parseNoticeResults(postHtml, siteId)
-          }
-        } finally {
-          clearTimeout(timeout)
-        }
-      }
-    }
+
+    // Step 1: GET the search page to extract ViewState tokens
+    const { html: formHtml } = await fetchWithScrapeDo(searchUrl)
+    const $form = cheerio.load(formHtml)
+
+    const viewState = $form('input[name="__VIEWSTATE"]').val() as string || ''
+    const viewStateGenerator = $form('input[name="__VIEWSTATEGENERATOR"]').val() as string || ''
+    const eventValidation = $form('input[name="__EVENTVALIDATION"]').val() as string || ''
+
+    console.log(`[PublicNotices] ViewState found: ${viewState.length > 0}`)
+
+    // Step 2: POST the search form with the correct field names
+    const formData = new URLSearchParams()
+    formData.set('__VIEWSTATE', viewState)
+    if (viewStateGenerator) formData.set('__VIEWSTATEGENERATOR', viewStateGenerator)
+    if (eventValidation) formData.set('__EVENTVALIDATION', eventValidation)
+    formData.set('ctl00$ContentPlaceHolder1$as1$txtSearch', keyword || '')
+    formData.set('ctl00$ContentPlaceHolder1$as1$hdnField', '0') // 0=All Words
+    formData.set('ctl00$ContentPlaceHolder1$as1$btnGo', '')     // submit button
+
+    const { html: resultsHtml } = await fetchWithScrapeDo(searchUrl, {
+      method: 'POST',
+      body: formData.toString()
+    })
+
+    let notices = parseNoticeResults(resultsHtml, siteId)
 
     // Filter by county if specified
     if (county && notices.length > 0) {
