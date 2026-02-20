@@ -253,9 +253,28 @@ export async function POST(request: NextRequest) {
       // The browse URL shows recent obits sorted by date
     }
 
-    // For keyword search, use the search URL
+    // For keyword/name search, use Legacy.com's search endpoint
+    // Supports: firstName, lastName, affiliateId, dateRange
     if (keyword) {
-      fetchUrl = `https://www.legacy.com/us/obituaries/houstonchronicle/browse?keyword=${encodeURIComponent(keyword)}`
+      const words = keyword.trim().split(/\s+/)
+      const searchParams = new URLSearchParams()
+      searchParams.set('affiliateId', source.affiliateId || '298')
+      if (words.length >= 2) {
+        // Treat as "First Last" name
+        searchParams.set('firstName', words[0])
+        searchParams.set('lastName', words.slice(1).join(' '))
+      } else {
+        // Single word — try as last name first (more common in REI use case)
+        searchParams.set('lastName', keyword.trim())
+      }
+      if (days) {
+        const dateRangeMap: Record<string, string> = {
+          '7': 'Last7Days', '30': 'Last30Days', '60': 'Last60Days', '90': 'Last90Days'
+        }
+        const dr = dateRangeMap[days]
+        if (dr) searchParams.set('dateRange', dr)
+      }
+      fetchUrl = `https://www.legacy.com/obituaries/search?${searchParams.toString()}`
     }
 
     console.log(`[Obituaries] Fetching: ${fetchUrl}`)
