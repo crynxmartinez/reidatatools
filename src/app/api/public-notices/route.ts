@@ -63,6 +63,25 @@ function buildSearchUrl(siteId: string, keyword: string, county?: string): strin
   return searchUrl
 }
 
+function detectNoticeType(text: string): string {
+  const t = text.toLowerCase()
+  if (t.includes('foreclos') || t.includes('trustee sale') || t.includes('deed of trust') || t.includes('mortgage')) return 'Foreclosure'
+  if (t.includes('probate') || t.includes('estate of') || t.includes('deceased') || t.includes('letters testamentary') || t.includes('guardian')) return 'Probate'
+  if (t.includes('tax sale') || t.includes('tax lien') || t.includes('delinquent tax')) return 'Tax Sale'
+  if (t.includes('auction') || t.includes('public sale') || t.includes('sheriff sale')) return 'Public Sale'
+  if (t.includes('ordinance')) return 'Ordinance'
+  if (t.includes('bid') || t.includes('rfp') || t.includes('request for proposal')) return 'Bids'
+  return 'Other'
+}
+
+function extractCounty(text: string, counties: string[]): string {
+  for (const c of counties) {
+    if (text.includes(c + ' County') || text.includes(c + ' county')) return c
+    if (text.includes(c)) return c
+  }
+  return ''
+}
+
 function parseNoticeResults(html: string, siteId: string): PublicNotice[] {
   const site = PUBLIC_NOTICE_SITES.find(s => s.id === siteId)
   if (!site) return []
@@ -71,166 +90,110 @@ function parseNoticeResults(html: string, siteId: string): PublicNotice[] {
   const notices: PublicNotice[] = []
   const baseUrl = `https://${site.domain}`
 
-  // The usalegalnotice platform renders results in a repeating pattern
-  // Look for notice entries - they typically have title links, dates, and newspaper info
+  // The usalegalnotice platform renders results inside a specific UpdatePanel/grid
+  // Results are in: #ContentPlaceHolder1_WSExtendedGridNP1_GridView1 (a GridView)
+  // or inside div.result-item / div.notice-row
+
+  // Strategy 1: Target the ASP.NET GridView results table
+  const $grid = $('#ctl00_ContentPlaceHolder1_WSExtendedGridNP1_GridView1, [id*="GridView1"], [id*="gvResults"], [id*="gridResults"]')
   
-  // Strategy 1: Look for result items with links to notice details
-  $('a[href*="NoticeDetail"], a[href*="noticedetail"], a[href*="Notice"]').each((_, el) => {
-    const $el = $(el)
-    const title = $el.text().trim()
-    const href = $el.attr('href') || ''
-    
-    if (!title || title.length < 5) return
-    
-    // Skip navigation links
-    if (title === 'Search Results' || title === 'Home' || title === 'Help' || 
-        title === 'Back' || title === 'Reset' || title.includes('Sign In') ||
-        title.includes('Smart Search') || title.includes('About')) return
-
-    const detailUrl = href.startsWith('http') ? href : `${baseUrl}/${href.replace(/^\//, '')}`
-
-    // Try to find surrounding context for date, county, newspaper
-    const $parent = $el.closest('tr, div, li, .notice-item, .result-item')
-    const parentText = $parent.text() || ''
-
-    // Extract date pattern
-    const dateMatch = parentText.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/)?.[1] || ''
-    
-    // Extract county - look for known county names
-    let county = ''
-    for (const c of site.counties) {
-      if (parentText.includes(c)) {
-        county = c
-        break
-      }
-    }
-
-    // Detect notice type from title/text
-    let noticeType = 'Other'
-    const lowerTitle = (title + ' ' + parentText).toLowerCase()
-    if (lowerTitle.includes('foreclos')) noticeType = 'Foreclosure'
-    else if (lowerTitle.includes('probate') || lowerTitle.includes('estate') || lowerTitle.includes('deceased')) noticeType = 'Probate'
-    else if (lowerTitle.includes('tax sale') || lowerTitle.includes('tax lien')) noticeType = 'Tax Sale'
-    else if (lowerTitle.includes('auction') || lowerTitle.includes('public sale')) noticeType = 'Public Sale'
-    else if (lowerTitle.includes('trustee') || lowerTitle.includes('deed of trust')) noticeType = 'Foreclosure'
-    else if (lowerTitle.includes('guardian') || lowerTitle.includes('conservator')) noticeType = 'Probate'
-    else if (lowerTitle.includes('ordinance')) noticeType = 'Ordinance'
-    else if (lowerTitle.includes('bid')) noticeType = 'Bids'
-
-    notices.push({
-      title: title.substring(0, 200),
-      date: dateMatch,
-      county,
-      newspaper: '',
-      noticeType,
-      snippet: parentText.substring(0, 300).trim(),
-      detailUrl,
-      state: site.stateCode
-    })
-  })
-
-  // Strategy 2: Look for table rows with notice data
-  if (notices.length === 0) {
-    $('table tr').each((i, row) => {
-      if (i === 0) return // skip header
+  if ($grid.length > 0) {
+    $grid.find('tr').each((i, row) => {
+      if (i === 0) return // skip header row
       const $row = $(row)
-      const cells = $row.find('td')
-      if (cells.length < 2) return
-
       const $link = $row.find('a[href]').first()
-      const title = $link.text().trim() || cells.eq(0).text().trim()
       const href = $link.attr('href') || ''
+      const title = $link.text().trim()
+      
+      if (!title || title.length < 5) return
+      
+      const detailUrl = href.startsWith('http') ? href : `${baseUrl}/${href.replace(/^\//, '')}`
+      const rowText = $row.text().trim()
+      const cells = $row.find('td')
+      
+      const dateMatch = rowText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1] || ''
+      const newspaper = cells.length > 1 ? cells.eq(cells.length - 1).text().trim() : ''
+      
+      notices.push({
+        title: title.substring(0, 200),
+        date: dateMatch,
+        county: extractCounty(rowText, site.counties),
+        newspaper,
+        noticeType: detectNoticeType(title + ' ' + rowText),
+        snippet: rowText.substring(0, 300),
+        detailUrl,
+        state: site.stateCode
+      })
+    })
+  }
+
+  // Strategy 2: Look for any links to NoticeDetail pages — these are always actual results
+  if (notices.length === 0) {
+    $('a[href*="NoticeDetail.aspx"]').each((_, el) => {
+      const $el = $(el)
+      const href = $el.attr('href') || ''
+      const title = $el.text().trim()
       
       if (!title || title.length < 5) return
 
-      const detailUrl = href.startsWith('http') ? href : (href ? `${baseUrl}/${href.replace(/^\//, '')}` : '')
-      const rowText = $row.text()
-
-      // Extract date
-      const dateMatch = rowText.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/)?.[1] || ''
-
-      // Extract county
-      let county = ''
-      for (const c of site.counties) {
-        if (rowText.includes(c)) {
-          county = c
-          break
-        }
-      }
-
-      // Detect notice type
-      let noticeType = 'Other'
-      const lowerText = rowText.toLowerCase()
-      if (lowerText.includes('foreclos')) noticeType = 'Foreclosure'
-      else if (lowerText.includes('probate') || lowerText.includes('estate')) noticeType = 'Probate'
-      else if (lowerText.includes('tax sale')) noticeType = 'Tax Sale'
-      else if (lowerText.includes('trustee')) noticeType = 'Foreclosure'
+      const detailUrl = href.startsWith('http') ? href : `${baseUrl}/${href.replace(/^\//, '')}`
+      const $row = $el.closest('tr, div.result, li')
+      const rowText = $row.length ? $row.text().trim() : title
+      const dateMatch = rowText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1] || ''
 
       notices.push({
         title: title.substring(0, 200),
         date: dateMatch,
-        county,
-        newspaper: cells.length > 2 ? cells.eq(1).text().trim() : '',
-        noticeType,
-        snippet: rowText.substring(0, 300).trim(),
+        county: extractCounty(rowText, site.counties),
+        newspaper: '',
+        noticeType: detectNoticeType(title + ' ' + rowText),
+        snippet: rowText.substring(0, 300),
         detailUrl,
         state: site.stateCode
       })
     })
   }
 
-  // Strategy 3: Look for any div/span blocks that look like results
+  // Strategy 3: Look for any table rows that have a link + date pattern (results grid)
   if (notices.length === 0) {
-    // Grab all text blocks that contain notice-like content
-    $('div, span, p').each((_, el) => {
-      const $el = $(el)
-      const text = $el.text().trim()
-      
-      if (text.length < 50 || text.length > 2000) return
-      
-      const lowerText = text.toLowerCase()
-      const isNotice = lowerText.includes('foreclos') || lowerText.includes('probate') || 
-                       lowerText.includes('tax sale') || lowerText.includes('trustee') ||
-                       lowerText.includes('estate of') || lowerText.includes('notice of sale')
-      
-      if (!isNotice) return
+    // Find the main content area to avoid parsing nav/sidebar
+    const $content = $('#ContentPlaceHolder1, #ctl00_ContentPlaceHolder1, .main-content, #mainContent').first()
+    const $scope = $content.length ? $content : $('body')
 
-      const $link = $el.find('a[href]').first()
+    $scope.find('table tr').each((i, row) => {
+      const $row = $(row)
+      const $link = $row.find('a[href]').first()
       const href = $link.attr('href') || ''
+      const title = $link.text().trim()
+
+      if (!title || title.length < 10) return
+      // Skip known nav links
+      if (['Search Results', 'Home', 'Help', 'Back', 'Reset', 'Archive Search'].includes(title)) return
+      if (title.includes('Sign In') || title.includes('Smart Search') || title.includes('About Public')) return
+
+      const rowText = $row.text().trim()
+      const dateMatch = rowText.match(/(\d{1,2}\/\d{1,2}\/\d{4})/)?.[1] || ''
+      if (!dateMatch && !href.includes('Notice')) return // skip rows without a date or notice link
+
       const detailUrl = href.startsWith('http') ? href : (href ? `${baseUrl}/${href.replace(/^\//, '')}` : '')
 
-      let noticeType = 'Other'
-      if (lowerText.includes('foreclos') || lowerText.includes('trustee')) noticeType = 'Foreclosure'
-      else if (lowerText.includes('probate') || lowerText.includes('estate')) noticeType = 'Probate'
-      else if (lowerText.includes('tax sale')) noticeType = 'Tax Sale'
-
-      const dateMatch = text.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/)?.[1] || ''
-
-      let county = ''
-      for (const c of site.counties) {
-        if (text.includes(c)) {
-          county = c
-          break
-        }
-      }
-
       notices.push({
-        title: text.substring(0, 100),
+        title: title.substring(0, 200),
         date: dateMatch,
-        county,
+        county: extractCounty(rowText, site.counties),
         newspaper: '',
-        noticeType,
-        snippet: text.substring(0, 300),
+        noticeType: detectNoticeType(title + ' ' + rowText),
+        snippet: rowText.substring(0, 300),
         detailUrl,
         state: site.stateCode
       })
     })
   }
 
-  // Deduplicate by title
+  // Deduplicate by detailUrl or title
   const seen = new Set<string>()
   return notices.filter(n => {
-    const key = n.title.toLowerCase()
+    const key = n.detailUrl || n.title.toLowerCase()
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -376,13 +339,15 @@ export async function POST(request: NextRequest) {
         if (viewStateGenerator) formData.set('__VIEWSTATEGENERATOR', viewStateGenerator)
         if (eventValidation) formData.set('__EVENTVALIDATION', eventValidation)
         
-        // Set search fields - common field names for usalegalnotice platform
+        // Set search fields - usalegalnotice platform field names (confirmed from HTML inspection)
         if (keyword) {
           formData.set('ctl00$ContentPlaceHolder1$as1$txtSearch', keyword)
         }
+        // hdnField: 0=All Words, 1=Any Words, 2=Exact Phrase
+        formData.set('ctl00$ContentPlaceHolder1$as1$hdnField', '0')
         
-        // Submit the search
-        formData.set('ctl00$ContentPlaceHolder1$as1$btnSearch', 'Search')
+        // Submit the search - button is btnGo not btnSearch
+        formData.set('ctl00$ContentPlaceHolder1$as1$btnGo', '')
         
         // Use Scrape.do with POST
         const postUrl = `https://api.scrape.do?token=${SCRAPE_DO_API_KEY}&url=${encodeURIComponent(searchUrl)}&super=true&geoCode=us`
