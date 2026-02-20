@@ -2,15 +2,13 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Microscope, Search, Loader2, CheckCircle, XCircle, Copy, Check, ChevronDown, Clock } from 'lucide-react'
-import { LEAD_TYPE_OPTIONS, DISTRESS_LEVEL_OPTIONS, DeepProspectJob } from '@/config/deepProspect'
+import { DeepProspectJob } from '@/config/deepProspect'
 
 const POLL_INTERVAL_MS = 5000
 
 export default function DeepProspectingPage() {
   const [ownerName, setOwnerName] = useState('')
   const [address, setAddress] = useState('')
-  const [leadType, setLeadType] = useState('foreclosure')
-  const [distressLevel, setDistressLevel] = useState('auto')
   const [extraContext, setExtraContext] = useState('')
   const [showContext, setShowContext] = useState(false)
 
@@ -87,7 +85,7 @@ export default function DeepProspectingPage() {
       const res = await fetch('/api/deep-prospect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ownerName, address, leadType, distressLevel, extraContext: extraContext || undefined })
+        body: JSON.stringify({ ownerName, address, extraContext: extraContext || undefined })
       })
 
       const data = await res.json()
@@ -98,8 +96,6 @@ export default function DeepProspectingPage() {
         taskId: data.taskId,
         ownerName,
         address,
-        leadType: leadType as any,
-        distressLevel: distressLevel as any,
         extraContext: extraContext || undefined,
         status: 'running',
         createdAt: new Date().toISOString()
@@ -139,30 +135,6 @@ export default function DeepProspectingPage() {
         </p>
       </div>
 
-      {/* Level Guide */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-        {[
-          { level: 1, label: 'Surface', desc: 'Owner alive, basic contact', color: 'green' },
-          { level: 2, label: 'Title Deep', desc: 'Deed chain, liens, divorce', color: 'yellow' },
-          { level: 3, label: 'Deceased', desc: 'Heir map, executor, PR', color: 'orange' },
-          { level: 4, label: 'Complex', desc: 'Entity/trust ownership', color: 'red' },
-        ].map(l => (
-          <div key={l.level} className={`rounded-lg p-3 border ${
-            l.color === 'green' ? 'bg-green-50 border-green-200' :
-            l.color === 'yellow' ? 'bg-yellow-50 border-yellow-200' :
-            l.color === 'orange' ? 'bg-orange-50 border-orange-200' :
-            'bg-red-50 border-red-200'
-          }`}>
-            <div className={`text-xs font-bold mb-0.5 ${
-              l.color === 'green' ? 'text-green-700' :
-              l.color === 'yellow' ? 'text-yellow-700' :
-              l.color === 'orange' ? 'text-orange-700' :
-              'text-red-700'
-            }`}>Level {l.level} — {l.label}</div>
-            <div className="text-xs text-gray-600">{l.desc}</div>
-          </div>
-        ))}
-      </div>
 
       {/* Input Form */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -186,30 +158,6 @@ export default function DeepProspectingPage() {
               placeholder="e.g. 1234 Main St, Houston TX 77001"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none text-gray-900"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lead Type</label>
-            <select
-              value={leadType}
-              onChange={e => setLeadType(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none bg-white text-gray-900"
-            >
-              {LEAD_TYPE_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Research Level</label>
-            <select
-              value={distressLevel}
-              onChange={e => setDistressLevel(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none bg-white text-gray-900"
-            >
-              {DISTRESS_LEVEL_OPTIONS.map(o => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { buildManusPrompt, LeadType, DistressLevel } from '@/config/deepProspect'
+import { buildManusPrompt } from '@/config/deepProspect'
 
 const MANUS_API_KEY = process.env.MANUS_API_KEY || ''
 const MANUS_BASE_URL = 'https://open.manus.im/v1'
@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { ownerName, address, leadType, distressLevel, extraContext } = body
+    const { ownerName, address, extraContext } = body
 
     if (!ownerName || !address) {
       return NextResponse.json({ error: 'Owner name and address are required.' }, { status: 400 })
@@ -20,8 +20,6 @@ export async function POST(request: NextRequest) {
     const prompt = buildManusPrompt({
       ownerName,
       address,
-      leadType: (leadType || 'other') as LeadType,
-      distressLevel: (distressLevel || 'auto') as DistressLevel,
       extraContext: extraContext || undefined
     })
 

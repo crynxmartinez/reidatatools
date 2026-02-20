@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { History, Microscope, CheckCircle, XCircle, Clock, Trash2, ChevronDown, ChevronUp, Copy, Check } from 'lucide-react'
-import { DeepProspectJob, LEAD_TYPE_OPTIONS } from '@/config/deepProspect'
+import { DeepProspectJob } from '@/config/deepProspect'
 import Link from 'next/link'
 
 export default function DeepProspectHistoryPage() {
@@ -33,9 +33,6 @@ export default function DeepProspectHistoryPage() {
     setCopied(id)
     setTimeout(() => setCopied(null), 2000)
   }
-
-  const getLeadLabel = (type: string) =>
-    LEAD_TYPE_OPTIONS.find(o => o.value === type)?.label || type
 
   const formatDate = (iso: string) => {
     try {
@@ -97,9 +94,6 @@ export default function DeepProspectHistoryPage() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <h3 className="font-semibold text-gray-900 truncate">{job.ownerName}</h3>
-                    <span className="text-xs px-2 py-0.5 bg-violet-100 text-violet-700 rounded-full flex-shrink-0">
-                      {getLeadLabel(job.leadType)}
-                    </span>
                     <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
                       job.status === 'completed' ? 'bg-green-100 text-green-700' :
                       job.status === 'failed' ? 'bg-red-100 text-red-700' :
