@@ -28,8 +28,14 @@ export default function DeepProspectHistoryPage() {
     localStorage.removeItem('dp_history')
   }
 
-  const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text)
+  const safeResult = (result: any): string => {
+    if (!result) return ''
+    if (typeof result === 'string') return result
+    return JSON.stringify(result, null, 2)
+  }
+
+  const handleCopy = (id: string, text: any) => {
+    navigator.clipboard.writeText(safeResult(text))
     setCopied(id)
     setTimeout(() => setCopied(null), 2000)
   }
@@ -137,7 +143,7 @@ export default function DeepProspectHistoryPage() {
               {expanded === job.id && job.result && (
                 <div className="border-t border-gray-200 bg-gray-50 p-5">
                   <pre className="whitespace-pre-wrap text-sm text-gray-800 font-sans leading-relaxed">
-                    {job.result}
+                    {safeResult(job.result)}
                   </pre>
                 </div>
               )}
