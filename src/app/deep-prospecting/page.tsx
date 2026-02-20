@@ -17,9 +17,26 @@ export default function DeepProspectingPage() {
   const [error, setError] = useState<string | null>(null)
   const [elapsed, setElapsed] = useState(0)
   const [copied, setCopied] = useState(false)
+  const [resumed, setResumed] = useState(false)
 
   const pollRef = useRef<NodeJS.Timeout | null>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
+
+  // On mount: resume any in-progress job from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dp_active_job')
+      if (saved) {
+        const parsed = JSON.parse(saved) as DeepProspectJob
+        if (parsed.status === 'running' || parsed.status === 'pending') {
+          setJob(parsed)
+          setResumed(true)
+        } else {
+          localStorage.removeItem('dp_active_job')
+        }
+      }
+    } catch { /* ignore */ }
+  }, [])
 
   // Elapsed timer
   useEffect(() => {
@@ -44,16 +61,15 @@ export default function DeepProspectingPage() {
         const data = await res.json()
 
         if (data.status === 'completed') {
-          setJob(prev => prev ? {
-            ...prev,
-            status: 'completed',
-            result: data.result,
-            completedAt: new Date().toISOString()
-          } : prev)
-          saveToHistory({ ...job, status: 'completed', result: data.result, completedAt: new Date().toISOString() })
+          const result = typeof data.result === 'string' ? data.result : JSON.stringify(data.result || '')
+          const completed = { ...job, status: 'completed' as const, result, completedAt: new Date().toISOString() }
+          setJob(completed)
+          saveToHistory(completed)
+          localStorage.removeItem('dp_active_job')
           if (pollRef.current) clearInterval(pollRef.current)
         } else if (data.status === 'failed') {
           setJob(prev => prev ? { ...prev, status: 'failed' } : prev)
+          localStorage.removeItem('dp_active_job')
           if (pollRef.current) clearInterval(pollRef.current)
         }
       } catch { /* keep polling */ }
@@ -67,6 +83,12 @@ export default function DeepProspectingPage() {
       const existing = JSON.parse(localStorage.getItem('dp_history') || '[]') as DeepProspectJob[]
       const updated = [j, ...existing.filter(e => e.id !== j.id)].slice(0, 50)
       localStorage.setItem('dp_history', JSON.stringify(updated))
+    } catch { /* ignore */ }
+  }
+
+  const saveActiveJob = (j: DeepProspectJob) => {
+    try {
+      localStorage.setItem('dp_active_job', JSON.stringify(j))
     } catch { /* ignore */ }
   }
 
@@ -103,6 +125,7 @@ export default function DeepProspectingPage() {
 
       setJob(newJob)
       saveToHistory(newJob)
+      saveActiveJob(newJob)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -135,6 +158,14 @@ export default function DeepProspectingPage() {
         </p>
       </div>
 
+
+      {/* Resumed banner */}
+      {resumed && job?.status === 'running' && (
+        <div className="bg-violet-50 border border-violet-200 text-violet-700 px-4 py-3 rounded-lg mb-4 text-sm flex items-center">
+          <Loader2 className="w-4 h-4 animate-spin mr-2 flex-shrink-0" />
+          Research resumed — Manus is still working on <strong className="mx-1">{job.ownerName}</strong>. Results will appear below when done.
+        </div>
+      )}
 
       {/* Input Form */}
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">

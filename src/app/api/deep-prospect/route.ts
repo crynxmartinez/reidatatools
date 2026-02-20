@@ -98,16 +98,36 @@ export async function GET(request: NextRequest) {
     const isCompleted = status === 'completed' || status === 'done' || status === 'finished' || status === 'success'
     const isFailed = status === 'failed' || status === 'error'
 
-    // Extract result content from possible response shapes
+    // Extract result content — Manus returns messages array with content objects
     let result = ''
     if (isCompleted) {
-      result = data.result
-        || data.output
-        || data.content
-        || data.response
-        || data.messages?.find((m: any) => m.role === 'assistant')?.content
-        || ''
+      // Try messages array first — find last assistant message
+      const messages = data.messages || data.result?.messages || []
+      if (Array.isArray(messages) && messages.length > 0) {
+        const assistantMsgs = messages.filter((m: any) => m.role === 'assistant')
+        const lastMsg = assistantMsgs[assistantMsgs.length - 1]
+        if (lastMsg) {
+          // content can be a string or array of {type, text} blocks
+          if (typeof lastMsg.content === 'string') {
+            result = lastMsg.content
+          } else if (Array.isArray(lastMsg.content)) {
+            result = lastMsg.content
+              .filter((c: any) => c.type === 'text' || typeof c.text === 'string')
+              .map((c: any) => c.text || c.content || '')
+              .join('\n')
+          }
+        }
+      }
+
+      // Fallback to top-level fields
+      if (!result) {
+        const fallback = data.result || data.output || data.response || data.content
+        result = typeof fallback === 'string' ? fallback : JSON.stringify(fallback || '')
+      }
     }
+
+    // Log raw for debugging
+    console.log('[DeepProspect] Poll raw keys:', Object.keys(data))
 
     return NextResponse.json({
       success: true,
